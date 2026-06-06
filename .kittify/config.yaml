@@ -1,0 +1,11 @@
+project:
+  uuid: faf56d80-791b-497d-962d-a64cf0258fc1
+  slug: pontificate
+  node_id: 752e6076aa27
+  build_id: 77f6ba18-5f42-4b3e-a055-e5db4dbdfa8d
+vcs:
+  type: git
+agents:
+  available:
+  - codex
+  auto_commit: true
