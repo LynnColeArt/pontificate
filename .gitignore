@@ -1,0 +1,11 @@
+.zig-cache/
+zig-out/
+build/
+
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+
+/.cache/
