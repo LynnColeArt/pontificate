@@ -1,7 +1,7 @@
 {
-  "event_count": 4,
-  "last_event_id": "01KTJ0YH8NWVVXRJARDR37TN94",
-  "materialized_at": "2026-06-07T21:48:44.693793+00:00",
+  "event_count": 5,
+  "last_event_id": "01KTJ0YJARS7M1E1G8ZE7DNQRY",
+  "materialized_at": "2026-06-07T21:48:45.784902+00:00",
   "mission_number": "",
   "mission_slug": "pontificate-editor-foundation-and-media-library-01KTJ00R",
   "mission_type": "software-dev",
@@ -14,7 +14,7 @@
     "for_review": 0,
     "in_progress": 0,
     "in_review": 0,
-    "planned": 4
+    "planned": 5
   },
   "work_packages": {
     "WP01": {
@@ -44,6 +44,13 @@
       "lane": "planned",
       "last_event_id": "01KTJ0YH8NWVVXRJARDR37TN94",
       "last_transition_at": "2026-06-07T21:48:44.693793+00:00"
+    },
+    "WP05": {
+      "actor": "finalize-tasks",
+      "force_count": 1,
+      "lane": "planned",
+      "last_event_id": "01KTJ0YJARS7M1E1G8ZE7DNQRY",
+      "last_transition_at": "2026-06-07T21:48:45.784902+00:00"
     }
   }
 }
