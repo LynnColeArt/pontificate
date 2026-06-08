@@ -1,5 +1,6 @@
 const std = @import("std");
 const media = @import("media.zig");
+const probe = @import("probe.zig");
 const timeline_model = @import("timeline.zig");
 
 pub const schema_version: u32 = 1;
@@ -30,7 +31,8 @@ pub const Project = struct {
 
     pub fn deinit(self: *Project) void {
         self.timeline.deinit();
-        for (self.assets.items) |asset| {
+        for (self.assets.items) |*asset| {
+            asset.metadata.deinitOwned(self.allocator);
             self.allocator.free(asset.display_name);
             self.allocator.free(asset.source_path);
         }
@@ -96,10 +98,14 @@ pub const Project = struct {
             try json.write(asset.kind);
             try json.objectField("status");
             try json.write(asset.status);
+            try json.objectField("probe_status");
+            try json.write(asset.probe_status);
+            try json.objectField("metadata");
+            try json.write(asset.metadata);
             try json.objectField("duration_seconds");
-            try json.write(asset.duration_seconds);
+            try json.write(assetDuration(asset));
             try json.objectField("dimensions");
-            try json.write(asset.dimensions);
+            try json.write(assetDimensions(asset));
             try json.objectField("import_order");
             try json.write(asset.import_order);
             try json.endObject();
@@ -202,6 +208,9 @@ pub const Project = struct {
             const display_copy = try allocator.dupe(u8, asset.display_name);
             errdefer allocator.free(display_copy);
 
+            var metadata = try ownedMetadataFromSerialized(allocator, asset.metadata);
+            errdefer metadata.deinitOwned(allocator);
+
             const loaded_status = revalidatedStatus(io, source_copy, asset.kind, asset.status);
             const loaded_asset = media.MediaAsset{
                 .id = media.AssetId.init(asset.id),
@@ -209,12 +218,15 @@ pub const Project = struct {
                 .source_path = source_copy,
                 .kind = asset.kind,
                 .status = loaded_status,
-                .duration_seconds = asset.duration_seconds,
-                .dimensions = asset.dimensions,
+                .probe_status = asset.probe_status,
+                .metadata = metadata,
+                .duration_seconds = asset.duration_seconds orelse metadata.duration_seconds,
+                .dimensions = asset.dimensions orelse metadata.dimensions,
                 .import_order = asset.import_order,
             };
 
             try project.assets.append(loaded_asset);
+            metadata = .{};
             max_id = @max(max_id, asset.id);
         }
 
@@ -259,8 +271,42 @@ pub const Project = struct {
             .kind = asset.kind,
             .status = asset.status,
             .display_name = asset.display_name,
-            .duration_seconds = asset.duration_seconds,
+            .duration_seconds = assetDuration(asset),
         }, placement);
+    }
+
+    pub fn probeAsset(self: *Project, io: std.Io, asset_index: usize) !media.ProbeStatus {
+        return self.probeAssetWithTool(io, asset_index, "ffprobe");
+    }
+
+    pub fn probeAssetWithTool(
+        self: *Project,
+        io: std.Io,
+        asset_index: usize,
+        ffprobe_path: []const u8,
+    ) !media.ProbeStatus {
+        if (asset_index >= self.assets.items.len) return ProjectError.AssetIndexOutOfBounds;
+        const asset = &self.assets.items[asset_index];
+        if (asset.kind == .subtitle or asset.kind == .unknown) {
+            asset.metadata.deinitOwned(self.allocator);
+            asset.probe_status = .unsupported;
+            asset.metadata = .{};
+            asset.duration_seconds = null;
+            asset.dimensions = null;
+            return asset.probe_status;
+        }
+
+        var result = try runFfprobe(self.allocator, io, ffprobe_path, asset.source_path);
+        defer result.deinitOwned(self.allocator);
+
+        asset.metadata.deinitOwned(self.allocator);
+        asset.probe_status = result.status;
+        asset.metadata = result.metadata;
+        result.metadata = .{};
+        asset.duration_seconds = asset.metadata.duration_seconds;
+        asset.dimensions = asset.metadata.dimensions;
+
+        return asset.probe_status;
     }
 
     pub fn splitClip(self: *Project, clip_index: usize, split_time: timeline_model.Seconds) ProjectEditError!timeline_model.TimelineClip {
@@ -337,6 +383,8 @@ const SerializedAsset = struct {
     source_path: []const u8,
     kind: media.MediaKind,
     status: media.MediaStatus,
+    probe_status: media.ProbeStatus = .unprobed,
+    metadata: media.MediaMetadata = .{},
     duration_seconds: ?f64 = null,
     dimensions: ?media.Dimensions = null,
     import_order: u64 = 0,
@@ -376,6 +424,69 @@ fn revalidatedStatus(
     if (kind == .unknown or persisted_status == .unsupported) return .unsupported;
     if (pathExists(io, source_path)) return .available;
     return .missing;
+}
+
+fn assetDuration(asset: media.MediaAsset) ?f64 {
+    return asset.metadata.duration_seconds orelse asset.duration_seconds;
+}
+
+fn assetDimensions(asset: media.MediaAsset) ?media.Dimensions {
+    return asset.metadata.dimensions orelse asset.dimensions;
+}
+
+fn ownedMetadataFromSerialized(
+    allocator: std.mem.Allocator,
+    serialized: media.MediaMetadata,
+) !media.MediaMetadata {
+    var metadata = serialized;
+    metadata.container = null;
+    metadata.video_codec = null;
+    metadata.audio_codec = null;
+    errdefer metadata.deinitOwned(allocator);
+
+    if (serialized.container) |value| metadata.container = try allocator.dupe(u8, value);
+    if (serialized.video_codec) |value| metadata.video_codec = try allocator.dupe(u8, value);
+    if (serialized.audio_codec) |value| metadata.audio_codec = try allocator.dupe(u8, value);
+
+    return metadata;
+}
+
+fn runFfprobe(
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    ffprobe_path: []const u8,
+    source_path: []const u8,
+) !media.MediaProbeResult {
+    const result = std.process.run(allocator, io, .{
+        .argv = &.{
+            ffprobe_path,
+            "-v",
+            "error",
+            "-print_format",
+            "json",
+            "-show_format",
+            "-show_streams",
+            source_path,
+        },
+        .stdout_limit = .limited(1024 * 1024),
+        .stderr_limit = .limited(64 * 1024),
+    }) catch |err| {
+        return .{ .status = switch (err) {
+            error.FileNotFound => .tool_unavailable,
+            else => .failed,
+        } };
+    };
+    defer allocator.free(result.stdout);
+    defer allocator.free(result.stderr);
+
+    switch (result.term) {
+        .exited => |code| {
+            if (code != 0) return .{ .status = .failed };
+        },
+        else => return .{ .status = .failed },
+    }
+
+    return try probe.parseFfprobeJson(allocator, result.stdout);
 }
 
 fn ownedOpacityKeyframesFromSerialized(
@@ -545,6 +656,98 @@ test "project JSON round trip preserves asset fields" {
     try std.testing.expectEqual(@as(?timeline_model.ClipSummary, null), loaded.clipSummary(1));
 }
 
+test "project JSON round trip preserves probe metadata fields" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var project = try Project.init(std.testing.allocator, "project-probe-round-trip");
+    defer project.deinit();
+
+    const imported = try importSingleFixture(&project, tmp, "probed.mp4");
+    defer std.testing.allocator.free(imported.source_path);
+    project.assets.items[0].probe_status = .available;
+    project.assets.items[0].metadata = .{
+        .duration_seconds = 7.25,
+        .dimensions = .{ .width = 1280, .height = 720 },
+        .frame_rate = media.FrameRate.init(24000, 1001),
+        .has_video = true,
+        .has_audio = true,
+        .container = try std.testing.allocator.dupe(u8, "mov,mp4,m4a,3gp,3g2,mj2"),
+        .video_codec = try std.testing.allocator.dupe(u8, "h264"),
+        .audio_codec = try std.testing.allocator.dupe(u8, "aac"),
+    };
+
+    const json = try project.toOwnedJson(std.testing.allocator);
+    defer std.testing.allocator.free(json);
+    try std.testing.expect(std.mem.indexOf(u8, json, "\"probe_status\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, json, "\"metadata\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, json, "\"frame_rate\"") != null);
+
+    var loaded = try Project.loadFromSlice(std.testing.allocator, std.testing.io, json);
+    defer loaded.deinit();
+
+    const asset = loaded.assets.items[0];
+    try std.testing.expectEqual(media.ProbeStatus.available, asset.probe_status);
+    try std.testing.expectApproxEqAbs(@as(f64, 7.25), asset.metadata.duration_seconds.?, 0.0001);
+    try std.testing.expectEqual(media.Dimensions{ .width = 1280, .height = 720 }, asset.metadata.dimensions.?);
+    try std.testing.expectEqual(media.FrameRate{ .numerator = 24000, .denominator = 1001 }, asset.metadata.frame_rate.?);
+    try std.testing.expect(asset.metadata.has_video);
+    try std.testing.expect(asset.metadata.has_audio);
+    try std.testing.expect(!asset.metadata.has_subtitles);
+    try std.testing.expectEqualStrings("mov,mp4,m4a,3gp,3g2,mj2", asset.metadata.container.?);
+    try std.testing.expectEqualStrings("h264", asset.metadata.video_codec.?);
+    try std.testing.expectEqualStrings("aac", asset.metadata.audio_codec.?);
+    try std.testing.expectEqual(@as(?f64, 7.25), asset.duration_seconds);
+    try std.testing.expectEqual(@as(?media.Dimensions, .{ .width = 1280, .height = 720 }), asset.dimensions);
+}
+
+test "probed duration is used for new timeline clips" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var project = try Project.init(std.testing.allocator, "project-probed-duration");
+    defer project.deinit();
+
+    const imported = try importSingleFixture(&project, tmp, "duration.mp4");
+    defer std.testing.allocator.free(imported.source_path);
+    project.assets.items[0].probe_status = .available;
+    project.assets.items[0].metadata.duration_seconds = 9.75;
+
+    _ = try project.addAssetToTimeline(0, .{ .timeline_start = 1.0 });
+    const summary = project.clipSummary(0).?;
+    try std.testing.expectEqual(@as(f64, 9.75), summary.duration);
+}
+
+test "probe execution records unavailable tools and unsupported assets explicitly" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var project = try Project.init(std.testing.allocator, "project-probe-status");
+    defer project.deinit();
+
+    const imported_video = try importSingleFixture(&project, tmp, "missing-tool.mp4");
+    defer std.testing.allocator.free(imported_video.source_path);
+    const unavailable = try project.probeAssetWithTool(
+        std.testing.io,
+        0,
+        "__pontificate_missing_ffprobe_for_test__",
+    );
+    try std.testing.expectEqual(media.ProbeStatus.tool_unavailable, unavailable);
+    try std.testing.expectEqual(media.ProbeStatus.tool_unavailable, project.assets.items[0].probe_status);
+    try std.testing.expect(!project.assets.items[0].metadata.hasKnownFields());
+
+    const imported_subtitle = try importSingleFixture(&project, tmp, "captions.srt");
+    defer std.testing.allocator.free(imported_subtitle.source_path);
+    const unsupported = try project.probeAssetWithTool(
+        std.testing.io,
+        1,
+        "__should_not_run_for_subtitles__",
+    );
+    try std.testing.expectEqual(media.ProbeStatus.unsupported, unsupported);
+    try std.testing.expectEqual(media.ProbeStatus.unsupported, project.assets.items[1].probe_status);
+    try std.testing.expect(!project.assets.items[1].metadata.hasKnownFields());
+}
+
 test "project editing methods wrap timeline operations and keep assets stable" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
@@ -664,6 +867,8 @@ test "old schema clips without keyframes load with defaults" {
     try std.testing.expectEqual(media.MediaKind.video, loaded.timeline.clips.items[0].media_kind);
     try std.testing.expectEqual(@as(usize, 0), loaded.timeline.clips.items[0].opacity_keyframes.len);
     try std.testing.expectEqual(@as(f32, 1.0), try loaded.evaluateClipOpacity(0, 1.0));
+    try std.testing.expectEqual(media.ProbeStatus.unprobed, loaded.assets.items[0].probe_status);
+    try std.testing.expect(!loaded.assets.items[0].metadata.hasKnownFields());
 }
 
 test "invalid project edits leave assets clips and keyframes unchanged" {
@@ -733,6 +938,16 @@ test "load marks missing persisted sources offline" {
 
     try std.testing.expectEqual(@as(usize, 1), loaded.assets.items.len);
     try std.testing.expectEqual(media.MediaStatus.missing, loaded.assets.items[0].status);
+    loaded.assets.items[0].probe_status = .available;
+    loaded.assets.items[0].metadata.duration_seconds = 5.5;
+    loaded.assets.items[0].duration_seconds = null;
+    const reloaded_json = try loaded.toOwnedJson(std.testing.allocator);
+    defer std.testing.allocator.free(reloaded_json);
+    var reloaded = try Project.loadFromSlice(std.testing.allocator, std.testing.io, reloaded_json);
+    defer reloaded.deinit();
+    try std.testing.expectEqual(media.MediaStatus.missing, reloaded.assets.items[0].status);
+    try std.testing.expectEqual(media.ProbeStatus.available, reloaded.assets.items[0].probe_status);
+    try std.testing.expectEqual(@as(?f64, 5.5), reloaded.assets.items[0].metadata.duration_seconds);
     try std.testing.expectEqual(@as(u64, 10), loaded.next_asset_id);
 }
 

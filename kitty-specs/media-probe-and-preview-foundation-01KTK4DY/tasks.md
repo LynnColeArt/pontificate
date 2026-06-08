@@ -66,12 +66,12 @@ Generated from `spec.md`, `plan.md`, `research.md`, `data-model.md`, `quickstart
 
 **Included subtasks**:
 
-- [ ] T007 Persist probe status and metadata in project JSON. (WP02)
-- [ ] T008 Load older schema-1 assets without probe fields using unprobed defaults. (WP02)
-- [ ] T009 Add explicit project-level probe operation and safe `ffprobe` process invocation. (WP02)
-- [ ] T010 Preserve metadata when media revalidation marks a path missing. (WP02)
-- [ ] T011 Update timeline asset placement to use known positive probed duration. (WP02)
-- [ ] T012 Extend CLI inspection or add probe CLI smoke output. (WP02)
+- [x] T007 Persist probe status and metadata in project JSON. (WP02)
+- [x] T008 Load older schema-1 assets without probe fields using unprobed defaults. (WP02)
+- [x] T009 Add explicit project-level probe operation and safe `ffprobe` process invocation. (WP02)
+- [x] T010 Preserve metadata when media revalidation marks a path missing. (WP02)
+- [x] T011 Update timeline asset placement to use known positive probed duration. (WP02)
+- [x] T012 Extend CLI inspection or add probe CLI smoke output. (WP02)
 
 **Independent test**: Project JSON round trip preserves probe metadata; old project JSON loads; CLI output reports known and unknown probe states.
 

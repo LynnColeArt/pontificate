@@ -1,6 +1,7 @@
 const std = @import("std");
 const Io = std.Io;
 const pontificate = @import("pontificate");
+const media = pontificate.media;
 const project = pontificate.project;
 
 pub fn main(init: std.process.Init) !void {
@@ -57,15 +58,16 @@ fn inspectProject(init: std.process.Init, path: []const u8) !void {
     );
     for (loaded.assets.items) |asset| {
         try stdout.print(
-            "asset id={d} kind={s} status={s} name=\"{s}\" path=\"{s}\"\n",
+            "asset id={d} kind={s} status={s} probe={s}",
             .{
                 asset.id.value,
                 @tagName(asset.kind),
                 @tagName(asset.status),
-                asset.display_name,
-                asset.source_path,
+                @tagName(asset.probe_status),
             },
         );
+        try writeAssetMetadata(stdout, asset);
+        try stdout.print(" name=\"{s}\" path=\"{s}\"\n", .{ asset.display_name, asset.source_path });
     }
     var clip_index: usize = 0;
     while (clip_index < loaded.clipCount()) : (clip_index += 1) {
@@ -90,6 +92,43 @@ fn inspectProject(init: std.process.Init, path: []const u8) !void {
         );
     }
     try stdout.flush();
+}
+
+fn writeAssetMetadata(stdout: *std.Io.Writer, asset: media.MediaAsset) !void {
+    if (asset.metadata.duration_seconds) |duration| {
+        try stdout.print(" duration={d:.3}", .{duration});
+    } else if (asset.duration_seconds) |duration| {
+        try stdout.print(" duration={d:.3}", .{duration});
+    } else {
+        try stdout.print(" duration=unknown", .{});
+    }
+
+    if (asset.metadata.dimensions orelse asset.dimensions) |dimensions| {
+        try stdout.print(" dimensions={d}x{d}", .{ dimensions.width, dimensions.height });
+    } else {
+        try stdout.print(" dimensions=unknown", .{});
+    }
+
+    if (asset.metadata.frame_rate) |frame_rate| {
+        try stdout.print(" frame_rate={d:.3}", .{frame_rate.asFloat()});
+    } else {
+        try stdout.print(" frame_rate=unknown", .{});
+    }
+
+    try stdout.print(
+        " has_video={any} has_audio={any} has_subtitles={any}",
+        .{ asset.metadata.has_video, asset.metadata.has_audio, asset.metadata.has_subtitles },
+    );
+
+    if (asset.metadata.container) |container| {
+        try stdout.print(" container=\"{s}\"", .{container});
+    }
+    if (asset.metadata.video_codec) |codec| {
+        try stdout.print(" video_codec=\"{s}\"", .{codec});
+    }
+    if (asset.metadata.audio_codec) |codec| {
+        try stdout.print(" audio_codec=\"{s}\"", .{codec});
+    }
 }
 
 fn importAndSave(

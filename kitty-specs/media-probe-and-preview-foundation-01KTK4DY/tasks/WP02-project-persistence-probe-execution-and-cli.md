@@ -108,3 +108,7 @@ WP01 supplies parser and metadata types. This WP connects them to project state 
 ## Reviewer Guidance
 
 Review process invocation safety, JSON compatibility, and the distinction between media availability and probe status. Run `zig build test` and a CLI smoke command.
+
+## Activity Log
+
+- 2026-06-08T08:40:00Z - codex - Implemented project probe persistence, explicit `ffprobe` execution, old schema defaults, probed duration placement, and CLI probe metadata output; validation: `zig build test`, CLI import/inspect smoke.
