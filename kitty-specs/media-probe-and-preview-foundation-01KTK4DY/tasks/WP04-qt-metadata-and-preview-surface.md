@@ -106,3 +106,7 @@ WP03 exposes probe metadata through the C ABI. Qt should remain presentation-own
 ## Reviewer Guidance
 
 Review UI responsiveness, temporary-file handling, path safety in `QProcess`, and whether the preview remains a display-only first pass.
+
+## Activity Log
+
+- 2026-06-08T08:57:00Z - codex - Added Qt Library probe metadata rows, explicit Probe and Preview actions, still-image preview, temporary `ffmpeg` frame extraction, preview failure feedback, and CMake dependency wiring for `probe.zig`; validation: `zig build test`, `cmake -S . -B build`, `cmake --build build`, offscreen launch smoke timed out after reaching the Qt event loop.

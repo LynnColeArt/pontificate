@@ -20,6 +20,8 @@
 #include <QMap>
 #include <QPainter>
 #include <QPalette>
+#include <QPixmap>
+#include <QProcess>
 #include <QPushButton>
 #include <QSlider>
 #include <QSplitter>
@@ -27,6 +29,7 @@
 #include <QStyle>
 #include <QSpinBox>
 #include <QTabWidget>
+#include <QTemporaryDir>
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QVector>
@@ -117,6 +120,19 @@ static QByteArray readAssetSummary(PontificateProject *project, uint32_t index, 
     return status == PONTIFICATE_STATUS_OK ? QByteArray(buffer.constData()) : QByteArray();
 }
 
+static QByteArray readAssetProbeSummary(PontificateProject *project, uint32_t index, uint32_t *statusOut) {
+    QByteArray buffer(1024, '\0');
+    uint32_t status = pontificate_project_asset_probe_summary(project, index, buffer.data(), static_cast<uint32_t>(buffer.size()));
+    if (status == PONTIFICATE_STATUS_BUFFER_TOO_SMALL) {
+        buffer.fill('\0', 8192);
+        status = pontificate_project_asset_probe_summary(project, index, buffer.data(), static_cast<uint32_t>(buffer.size()));
+    }
+    if (statusOut) {
+        *statusOut = status;
+    }
+    return status == PONTIFICATE_STATUS_OK ? QByteArray(buffer.constData()) : QByteArray();
+}
+
 static QByteArray readClipSummary(PontificateProject *project, uint32_t index, uint32_t *statusOut) {
     QByteArray buffer(1024, '\0');
     uint32_t status = pontificate_project_clip_summary(project, index, buffer.data(), static_cast<uint32_t>(buffer.size()));
@@ -130,15 +146,28 @@ static QByteArray readClipSummary(PontificateProject *project, uint32_t index, u
     return status == PONTIFICATE_STATUS_OK ? QByteArray(buffer.constData()) : QByteArray();
 }
 
-static QString assetRowText(const SummaryFields &fields) {
+static QString assetMetadataLine(const SummaryFields &probeFields) {
+    const QString duration = probeFields.value("duration", "unknown");
+    const QString dimensions = probeFields.value("dimensions", "unknown");
+    const QString frameRate = probeFields.value("frame_rate", "unknown");
+    const QString video = probeFields.value("has_video", "false");
+    const QString audio = probeFields.value("has_audio", "false");
+    return QString("duration %1  |  %2  |  fps %3  |  V:%4 A:%5")
+        .arg(duration, dimensions, frameRate, video, audio);
+}
+
+static QString assetRowText(const SummaryFields &fields, const SummaryFields &probeFields) {
     const QString name = fields.value("name", "Asset");
     const QString kind = fields.value("kind", "unknown");
     const QString status = fields.value("status", "unknown");
+    const QString probe = probeFields.value("probe_status", fields.value("probe", "unprobed"));
     const QString path = fields.value("path");
+    const QString first = QString("%1  |  %2  |  %3  |  probe %4").arg(name, kind, status, probe);
+    const QString second = assetMetadataLine(probeFields);
     if (path.isEmpty()) {
-        return QString("%1  |  %2  |  %3").arg(name, kind, status);
+        return QString("%1\n%2").arg(first, second);
     }
-    return QString("%1  |  %2  |  %3\n%4").arg(name, kind, status, path);
+    return QString("%1\n%2\n%3").arg(first, second, path);
 }
 
 class TimelineView : public QGraphicsView {
@@ -289,15 +318,19 @@ static QWidget *makeTimelinePane(TimelineView **timelineOut) {
     return pane;
 }
 
-static QWidget *makePreviewPane() {
+static QWidget *makePreviewPane(QLabel **previewOut) {
     auto *pane = new QWidget;
     auto *layout = new QVBoxLayout(pane);
     layout->setContentsMargins(14, 14, 14, 14);
     layout->setSpacing(10);
 
     auto *preview = new QLabel("PONTIFICATE");
+    if (previewOut) {
+        *previewOut = preview;
+    }
     preview->setAlignment(Qt::AlignCenter);
     preview->setMinimumHeight(330);
+    preview->setWordWrap(true);
     preview->setStyleSheet(
         "QLabel {"
         "background: #08090d;"
@@ -335,6 +368,24 @@ static QWidget *makePreviewPane() {
     layout->addWidget(preview, 1);
     layout->addWidget(transport);
     return pane;
+}
+
+static void setPreviewMessage(QLabel *preview, const QString &message) {
+    if (!preview) {
+        return;
+    }
+    preview->clear();
+    preview->setText(message);
+}
+
+static bool setPreviewPixmap(QLabel *preview, const QPixmap &pixmap) {
+    if (!preview || pixmap.isNull()) {
+        return false;
+    }
+    const QSize target = preview->size().isValid() ? preview->size() : QSize(640, 360);
+    preview->setText(QString());
+    preview->setPixmap(pixmap.scaled(target, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    return true;
 }
 
 static QWidget *makeInspector() {
@@ -424,10 +475,14 @@ int main(int argc, char *argv[]) {
     auto *saveAction = toolbar->addAction(app.style()->standardIcon(QStyle::SP_DialogSaveButton), "Save");
     auto *importAction = toolbar->addAction(app.style()->standardIcon(QStyle::SP_FileDialogDetailedView), "Import");
     auto *addToTimelineAction = toolbar->addAction(app.style()->standardIcon(QStyle::SP_ArrowRight), "Add");
+    auto *probeAction = toolbar->addAction(app.style()->standardIcon(QStyle::SP_BrowserReload), "Probe");
+    auto *previewAction = toolbar->addAction(app.style()->standardIcon(QStyle::SP_DesktopIcon), "Preview");
     toolbar->addSeparator();
     toolbar->addAction(app.style()->standardIcon(QStyle::SP_ArrowBack), "Undo");
     toolbar->addAction(app.style()->standardIcon(QStyle::SP_ArrowForward), "Redo");
     addToTimelineAction->setEnabled(false);
+    probeAction->setEnabled(false);
+    previewAction->setEnabled(false);
 
     auto *library = new QListWidget;
     library->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -543,8 +598,9 @@ int main(int argc, char *argv[]) {
     editDock->raise();
 
     TimelineView *timeline = nullptr;
+    QLabel *previewLabel = nullptr;
     auto *splitter = new QSplitter(Qt::Vertical);
-    splitter->addWidget(makePreviewPane());
+    splitter->addWidget(makePreviewPane(&previewLabel));
     splitter->addWidget(makeTimelinePane(&timeline));
     splitter->setStretchFactor(0, 3);
     splitter->setStretchFactor(1, 1);
@@ -576,25 +632,35 @@ int main(int argc, char *argv[]) {
     };
 
     auto refreshLibrary = [&]() {
+        const int selectedRow = library->currentRow();
         library->clear();
         if (!project.get()) {
             addToTimelineAction->setEnabled(false);
+            probeAction->setEnabled(false);
+            previewAction->setEnabled(false);
             return;
         }
         const uint32_t count = pontificate_project_asset_count(project.get());
         for (uint32_t index = 0; index < count; ++index) {
             uint32_t status = PONTIFICATE_STATUS_OK;
             const QByteArray summary = readAssetSummary(project.get(), index, &status);
+            uint32_t probeStatus = PONTIFICATE_STATUS_OK;
+            const QByteArray probeSummary = readAssetProbeSummary(project.get(), index, &probeStatus);
             auto *item = new QListWidgetItem;
             item->setData(Qt::UserRole, index);
             if (status == PONTIFICATE_STATUS_OK) {
-                item->setText(assetRowText(parseSummary(summary)));
+                item->setText(assetRowText(parseSummary(summary), probeStatus == PONTIFICATE_STATUS_OK ? parseSummary(probeSummary) : SummaryFields()));
             } else {
                 item->setText(QString("Asset %1  |  %2").arg(index + 1).arg(statusName(status)));
             }
             library->addItem(item);
         }
+        if (selectedRow >= 0 && selectedRow < library->count()) {
+            library->setCurrentRow(selectedRow);
+        }
         addToTimelineAction->setEnabled(library->currentItem() != nullptr);
+        probeAction->setEnabled(library->currentItem() != nullptr);
+        previewAction->setEnabled(library->currentItem() != nullptr);
     };
 
     auto refreshAll = [&]() {
@@ -665,13 +731,138 @@ int main(int argc, char *argv[]) {
         }
     };
 
+    auto selectedAssetIndex = [&]() -> int {
+        auto *item = library->currentItem();
+        if (!item) {
+            return -1;
+        }
+        return item->data(Qt::UserRole).toInt();
+    };
+
+    auto selectedAssetFields = [&]() -> SummaryFields {
+        const int assetIndex = selectedAssetIndex();
+        if (!project.get() || assetIndex < 0) {
+            return SummaryFields();
+        }
+        uint32_t status = PONTIFICATE_STATUS_OK;
+        const QByteArray summary = readAssetSummary(project.get(), static_cast<uint32_t>(assetIndex), &status);
+        return status == PONTIFICATE_STATUS_OK ? parseSummary(summary) : SummaryFields();
+    };
+
+    auto probeSelectedAsset = [&]() {
+        if (!project.get()) {
+            showStatus("Core project unavailable");
+            return;
+        }
+        const int assetIndex = selectedAssetIndex();
+        if (assetIndex < 0) {
+            showStatus("Select a library asset first");
+            return;
+        }
+        const uint32_t status = pontificate_project_probe_asset(project.get(), static_cast<uint32_t>(assetIndex));
+        refreshLibrary();
+        if (assetIndex < library->count()) {
+            library->setCurrentRow(assetIndex);
+        }
+        showStatus(status == PONTIFICATE_STATUS_OK
+                       ? QString("Probed asset %1").arg(assetIndex + 1)
+                       : QString("Probe completed with %1").arg(statusName(status)));
+    };
+
+    auto previewStillImage = [&](const QString &path) {
+        const QPixmap pixmap(path);
+        if (setPreviewPixmap(previewLabel, pixmap)) {
+            showStatus(QString("Previewing %1").arg(path));
+        } else {
+            setPreviewMessage(previewLabel, "Image preview unavailable");
+            showStatus("Image preview failed");
+        }
+    };
+
+    auto previewVideoFrame = [&](const QString &path) {
+        QTemporaryDir tempDir;
+        if (!tempDir.isValid()) {
+            setPreviewMessage(previewLabel, "Preview temp path unavailable");
+            showStatus("Video preview failed: temporary path unavailable");
+            return;
+        }
+        const QString framePath = tempDir.filePath("frame.png");
+        QProcess ffmpeg;
+        ffmpeg.start("ffmpeg", {
+                                  "-y",
+                                  "-v",
+                                  "error",
+                                  "-ss",
+                                  "0",
+                                  "-i",
+                                  path,
+                                  "-frames:v",
+                                  "1",
+                                  framePath,
+                              });
+        if (!ffmpeg.waitForStarted(3000)) {
+            setPreviewMessage(previewLabel, "ffmpeg unavailable");
+            showStatus("Video preview unavailable: ffmpeg did not start");
+            return;
+        }
+        if (!ffmpeg.waitForFinished(15000)) {
+            ffmpeg.kill();
+            ffmpeg.waitForFinished(1000);
+            setPreviewMessage(previewLabel, "Video preview timed out");
+            showStatus("Video preview timed out");
+            return;
+        }
+        if (ffmpeg.exitStatus() != QProcess::NormalExit || ffmpeg.exitCode() != 0) {
+            setPreviewMessage(previewLabel, "Video frame extraction failed");
+            showStatus("Video preview failed");
+            return;
+        }
+        const QPixmap pixmap(framePath);
+        if (setPreviewPixmap(previewLabel, pixmap)) {
+            showStatus(QString("Previewing frame from %1").arg(path));
+        } else {
+            setPreviewMessage(previewLabel, "Extracted frame could not be loaded");
+            showStatus("Video preview failed: extracted frame unreadable");
+        }
+    };
+
+    auto previewSelectedAsset = [&]() {
+        const SummaryFields fields = selectedAssetFields();
+        const QString path = fields.value("path");
+        const QString kind = fields.value("kind", "unknown");
+        const QString status = fields.value("status", "unknown");
+        if (path.isEmpty()) {
+            setPreviewMessage(previewLabel, "Select a library asset");
+            showStatus("Select a library asset first");
+            return;
+        }
+        if (status != "available") {
+            setPreviewMessage(previewLabel, QString("Preview unavailable: %1").arg(status));
+            showStatus(QString("Preview unavailable: %1").arg(status));
+            return;
+        }
+        if (kind == "image") {
+            previewStillImage(path);
+        } else if (kind == "video") {
+            previewVideoFrame(path);
+        } else {
+            setPreviewMessage(previewLabel, QString("No visual preview for %1 assets").arg(kind));
+            showStatus(QString("No visual preview for %1 assets").arg(kind));
+        }
+    };
+
     QObject::connect(library, &QListWidget::itemSelectionChanged, &window, [&]() {
-        addToTimelineAction->setEnabled(project.get() && library->currentItem());
+        const bool hasSelection = project.get() && library->currentItem();
+        addToTimelineAction->setEnabled(hasSelection);
+        probeAction->setEnabled(hasSelection);
+        previewAction->setEnabled(hasSelection);
     });
     QObject::connect(library, &QListWidget::itemDoubleClicked, &window, [&](QListWidgetItem *) {
         addSelectedAssetToTimeline();
     });
     QObject::connect(addToTimelineAction, &QAction::triggered, &window, addSelectedAssetToTimeline);
+    QObject::connect(probeAction, &QAction::triggered, &window, probeSelectedAsset);
+    QObject::connect(previewAction, &QAction::triggered, &window, previewSelectedAsset);
     QObject::connect(clipIndexSpin, QOverload<int>::of(&QSpinBox::valueChanged), &window, [&](int value) {
         selectedClipIndex = value;
         updateEditControls();

@@ -106,12 +106,12 @@ Generated from `spec.md`, `plan.md`, `research.md`, `data-model.md`, `quickstart
 
 **Included subtasks**:
 
-- [ ] T017 Show probe metadata in Qt Library rows. (WP04)
-- [ ] T018 Add explicit UI probe action and refresh status feedback. (WP04)
-- [ ] T019 Display still-image previews through Qt image loading. (WP04)
-- [ ] T020 Extract video preview frames with `QProcess` and temporary files. (WP04)
-- [ ] T021 Report offline, unsupported, missing-tool, and extraction failures in the preview/status UI. (WP04)
-- [ ] T022 Keep preview display-only and ensure CMake/Qt build still passes. (WP04)
+- [x] T017 Show probe metadata in Qt Library rows. (WP04)
+- [x] T018 Add explicit UI probe action and refresh status feedback. (WP04)
+- [x] T019 Display still-image previews through Qt image loading. (WP04)
+- [x] T020 Extract video preview frames with `QProcess` and temporary files. (WP04)
+- [x] T021 Report offline, unsupported, missing-tool, and extraction failures in the preview/status UI. (WP04)
+- [x] T022 Keep preview display-only and ensure CMake/Qt build still passes. (WP04)
 
 **Independent test**: Qt build passes; manual or offscreen smoke can show still preview and unavailable video-preview feedback.
 

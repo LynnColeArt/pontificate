@@ -56,6 +56,7 @@ add_custom_command(
         "${CMAKE_SOURCE_DIR}/core/src/main.zig"
         "${CMAKE_SOURCE_DIR}/core/src/media.zig"
         "${CMAKE_SOURCE_DIR}/core/src/pontificate.zig"
+        "${CMAKE_SOURCE_DIR}/core/src/probe.zig"
         "${CMAKE_SOURCE_DIR}/core/src/project.zig"
         "${CMAKE_SOURCE_DIR}/core/src/timeline.zig"
     VERBATIM
