@@ -1,6 +1,6 @@
 # Architecture
 
-Pontificate keeps a hard boundary between the editor core and the desktop UI. The current implementation is a foundation slice: media import, project persistence, a C ABI, asset-backed timeline clips, deterministic split/trim/move edits, scalar opacity keyframes, and first-pass Qt edit controls are real. Playback, decoding, rendering/export, thumbnails, waveforms, full transitions, color processing, subtitle editing, Whisper integration, and packaging are not implemented yet.
+Pontificate keeps a hard boundary between the editor core and the desktop UI. The current implementation is a foundation slice: media import, optional media probing, project persistence, a C ABI, asset-backed timeline clips, deterministic split/trim/move edits, scalar opacity keyframes, first-pass Qt edit controls, and display-only still/frame preview are real. Playback, continuous decoding, rendering/export, thumbnails, waveforms, full transitions, color processing, subtitle editing, Whisper integration, and packaging are not implemented yet.
 
 ## Core
 
@@ -8,12 +8,26 @@ The Zig core owns the behavior that must remain deterministic and testable:
 
 - project file loading and saving
 - media library metadata
+- probe status and parsed media metadata from optional `ffprobe`
 - default timeline tracks and asset-backed timeline clips
 - timeline edit validation for split, trim, move, and opacity keyframe operations
 - scalar opacity keyframes and interpolation
 - project JSON compatibility for schema-1 files with or without clip keyframe data
 - static starter subtitle cue/style data and subtitle media classification
 - missing/offline media status
+
+## Media Probe And Preview
+
+Media files remain reference-based. The core can explicitly probe a selected asset by invoking `ffprobe` with argv arguments and parsing JSON into typed metadata:
+
+- probe status: unprobed, available, tool unavailable, failed, malformed, or unsupported
+- optional duration, dimensions, and frame rate
+- video, audio, and subtitle stream flags
+- display labels for container and codecs when available
+
+Probe metadata is persisted in schema-1 JSON as optional fields so old project files continue to load. Loading a project may revalidate media availability, but it does not discard persisted probe metadata when a source path is offline.
+
+Preview pixels are UI-owned. Qt loads still images directly and asks `ffmpeg` to extract one temporary PNG for video preview. The temporary frame is display state only: it is not stored in project JSON, not cached persistently, and not part of a playback pipeline.
 
 Future core work should add:
 
@@ -60,6 +74,7 @@ Project files use JSON schema version `1`. The current shape stores:
 - `assets` with stable IDs, display names, reference paths, media kind, status, optional duration, optional dimensions, and import order
 - `timeline.tracks` with the default track identifiers and display labels
 - `timeline.clips` with asset references, media kind, timeline placement fields, opacity, blend mode, and optional `opacity_keyframes`
+- optional asset `probe_status` and `metadata` fields for probed duration, dimensions, frame rate, stream flags, and codec/container labels
 
 Media paths are reference-based. Importing a known media extension whose file is not currently readable creates an offline asset with `missing` status. Loading a project revalidates paths and marks unavailable sources as missing instead of dropping them. Older schema-1 clips without `opacity_keyframes` load with an empty keyframe curve.
 
@@ -83,6 +98,8 @@ uint32_t pontificate_project_trim_clip(PontificateProject *project, uint32_t cli
 uint32_t pontificate_project_move_clip(PontificateProject *project, uint32_t clip_index, uint32_t track_index, double timeline_start);
 uint32_t pontificate_project_set_clip_opacity_keyframe(PontificateProject *project, uint32_t clip_index, double clip_time, double value);
 double pontificate_project_evaluate_clip_opacity(const PontificateProject *project, uint32_t clip_index, double clip_time, uint32_t *status_out);
+uint32_t pontificate_project_probe_asset(PontificateProject *project, uint32_t index);
+uint32_t pontificate_project_asset_probe_summary(const PontificateProject *project, uint32_t index, char *buffer, uint32_t buffer_len);
 ```
 
 These functions address clips by the current sorted clip index. Qt refreshes summaries and selection after successful edits because split and move operations can change clip ordering.

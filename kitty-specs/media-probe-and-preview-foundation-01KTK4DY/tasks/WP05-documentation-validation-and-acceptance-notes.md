@@ -90,3 +90,7 @@ Earlier WPs implement behavior. This WP prevents product overclaiming and gives 
 ## Reviewer Guidance
 
 Review for overclaiming. This mission ships metadata and still/frame preview, not playback, export, color grading, subtitle editing, or packaged distribution.
+
+## Activity Log
+
+- 2026-06-08T09:04:00Z - codex - Updated README, architecture, and feature docs for shipped probe/preview behavior and non-goals; recorded validation evidence in quickstart; validation: `zig build test`, `zig build run`, `cmake -S . -B build`, `cmake --build build`, `git diff --check`.

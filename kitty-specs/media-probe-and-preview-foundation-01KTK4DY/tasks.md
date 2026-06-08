@@ -127,9 +127,9 @@ Generated from `spec.md`, `plan.md`, `research.md`, `data-model.md`, `quickstart
 
 **Included subtasks**:
 
-- [ ] T023 Update public feature and architecture docs with shipped probe/preview behavior. (WP05)
-- [ ] T024 Document non-goals: playback, export, caches, color, subtitles, packaging. (WP05)
-- [ ] T025 Record validation commands and acceptance evidence. (WP05)
-- [ ] T026 Run final validation and clean worktree state. (WP05)
+- [x] T023 Update public feature and architecture docs with shipped probe/preview behavior. (WP05)
+- [x] T024 Document non-goals: playback, export, caches, color, subtitles, packaging. (WP05)
+- [x] T025 Record validation commands and acceptance evidence. (WP05)
+- [x] T026 Run final validation and clean worktree state. (WP05)
 
 **Independent test**: Docs match shipped behavior; validation commands are run and recorded before acceptance.

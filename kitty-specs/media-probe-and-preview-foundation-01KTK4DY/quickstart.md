@@ -11,6 +11,17 @@ git diff --check
 git status --short --branch
 ```
 
+## Validation Evidence
+
+Last run during WP05:
+
+- `zig build test`: passed
+- `zig build run`: passed
+- `cmake -S . -B build`: passed
+- `cmake --build build`: passed
+- `git diff --check`: passed
+- `QT_QPA_PLATFORM=offscreen timeout 3s ./build/pontificate`: reached the Qt event loop and exited by timeout as expected
+
 ## CLI Smoke Path
 
 ```sh

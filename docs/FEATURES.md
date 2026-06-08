@@ -9,19 +9,24 @@ Pontificate is Linux-first video editing without the usual rough edges. The edit
 - Core media library records with stable asset IDs, display names, source paths, kind, status, and import order.
 - Duplicate detection for repeated imports of the same selected path.
 - Missing/offline media status preserved in project state.
+- Explicit media probe status and persisted probe metadata for duration, dimensions, frame rate, stream presence, and optional codec/container labels.
 - JSON project save/load with schema version `1`.
 - Default timeline tracks for video, audio, subtitles, and adjustment/grade.
 - Asset-backed timeline clips with asset references, media kind, start time, source in, duration, opacity, opacity keyframes, and blend mode placeholder.
 - Deterministic core timeline edits for split, trim, and move.
 - Scalar opacity keyframe insertion, replacement, preservation through split/trim, and interpolation.
 - Project JSON persistence for clip `media_kind` and `opacity_keyframes`, with backwards-compatible loading for older schema-1 clips that do not contain keyframes.
-- C ABI with opaque project handles, caller-owned summary buffers for media and timeline rows, and edit calls for split, trim, move, opacity keyframe set, and opacity evaluation.
-- Qt Library rows populated from core summaries.
+- Project JSON persistence for asset `probe_status` and `metadata`, with backwards-compatible loading for older schema-1 assets that do not contain probe fields.
+- C ABI with opaque project handles, caller-owned summary buffers for media, probe, and timeline rows, probe execution, and edit calls for split, trim, move, opacity keyframe set, and opacity evaluation.
+- Qt Library rows populated from core summaries, including probe status and known media metadata.
+- Qt action to explicitly probe a selected asset when `ffprobe` is available.
+- Qt preview action for selected still images and representative video frames extracted through temporary `ffmpeg` output.
 - Qt action to add a selected Library asset to the timeline.
 - Timeline rendering from core clip summaries while preserving the existing zoom slider behavior after redraws.
 - Qt Edit dock controls for selected-clip split, trim, move, opacity keyframe set, and opacity evaluation.
 - Open/save dialogs for JSON project smoke workflows.
 - CLI output for available edit/keyframe operations plus saved-project clip inspection.
+- CLI saved-project inspection includes asset probe status and known metadata.
 - Core validation through Zig tests plus CMake/Qt build validation.
 
 ## Editing
@@ -38,6 +43,7 @@ Implemented editing foundation:
 Planned editing scope:
 
 - media library with bins, metadata, search, thumbnails, and missing-media relinking
+- automatic background probing with progress/cancel
 - layered video, audio, subtitle, and adjustment tracks
 - trim handles, ripple edits, roll/slip/slide edits, clip cropping, transforms, fades, and editable blend modes
 - timeline zoom, pan, snapping, ripple delete, in/out ranges, markers, and stable playhead navigation
@@ -99,8 +105,10 @@ Future work:
 Partially started:
 
 - stable project format with schema versioning
+- backwards-compatible loading for schema-1 media assets without probe fields
 - backwards-compatible loading for schema-1 timeline clips without keyframes
 - graceful offline media records for missing sources
+- explicit missing-tool/failure states for optional `ffprobe` and `ffmpeg` probe/preview paths
 - atomic validation for invalid split, trim, move, and opacity keyframe operations
 
 Future work:
@@ -108,6 +116,7 @@ Future work:
 - command-based undo and redo across every edit surface
 - autosave, crash recovery, and project backups
 - proxy generation, render cache, preview quality controls, and cache invalidation
+- persistent thumbnails and waveform generation
 - project migrations
 - media relinking
 - deterministic render planning with test coverage in the Zig core
