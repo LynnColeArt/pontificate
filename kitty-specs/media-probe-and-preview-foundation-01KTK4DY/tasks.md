@@ -45,12 +45,12 @@ Generated from `spec.md`, `plan.md`, `research.md`, `data-model.md`, `quickstart
 
 **Included subtasks**:
 
-- [ ] T001 Add probe metadata value types and status enum. (WP01)
-- [ ] T002 Add `core/src/probe.zig` parser boundary and result model. (WP01)
-- [ ] T003 Parse successful video, audio-only, and missing-field `ffprobe` JSON fixtures. (WP01)
-- [ ] T004 Map malformed, failed, unavailable, and unsupported outcomes. (WP01)
-- [ ] T005 Add deterministic parser tests and keep existing media tests passing. (WP01)
-- [ ] T006 Wire new module into `build.zig` test coverage. (WP01)
+- [x] T001 Add probe metadata value types and status enum. (WP01)
+- [x] T002 Add `core/src/probe.zig` parser boundary and result model. (WP01)
+- [x] T003 Parse successful video, audio-only, and missing-field `ffprobe` JSON fixtures. (WP01)
+- [x] T004 Map malformed, failed, unavailable, and unsupported outcomes. (WP01)
+- [x] T005 Add deterministic parser tests and keep existing media tests passing. (WP01)
+- [x] T006 Wire new module into `build.zig` test coverage. (WP01)
 
 **Independent test**: `zig build test` covers probe parser fixtures and metadata defaults without requiring FFmpeg tools.
 

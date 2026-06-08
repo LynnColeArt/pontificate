@@ -28,12 +28,80 @@ pub const Dimensions = struct {
     height: u32,
 };
 
+pub const ProbeStatus = enum {
+    unprobed,
+    available,
+    tool_unavailable,
+    failed,
+    malformed,
+    unsupported,
+};
+
+pub const FrameRate = struct {
+    numerator: u32,
+    denominator: u32,
+
+    pub fn init(numerator: u32, denominator: u32) ?FrameRate {
+        if (numerator == 0 or denominator == 0) return null;
+        return .{ .numerator = numerator, .denominator = denominator };
+    }
+
+    pub fn asFloat(self: FrameRate) f64 {
+        return @as(f64, @floatFromInt(self.numerator)) / @as(f64, @floatFromInt(self.denominator));
+    }
+};
+
+pub const MediaMetadata = struct {
+    duration_seconds: ?f64 = null,
+    dimensions: ?Dimensions = null,
+    frame_rate: ?FrameRate = null,
+    has_video: bool = false,
+    has_audio: bool = false,
+    has_subtitles: bool = false,
+    container: ?[]const u8 = null,
+    video_codec: ?[]const u8 = null,
+    audio_codec: ?[]const u8 = null,
+
+    pub fn deinitOwned(self: *MediaMetadata, allocator: std.mem.Allocator) void {
+        if (self.container) |value| allocator.free(value);
+        if (self.video_codec) |value| allocator.free(value);
+        if (self.audio_codec) |value| allocator.free(value);
+        self.* = .{};
+    }
+
+    pub fn hasKnownFields(self: MediaMetadata) bool {
+        return self.duration_seconds != null or
+            self.dimensions != null or
+            self.frame_rate != null or
+            self.has_video or
+            self.has_audio or
+            self.has_subtitles or
+            self.container != null or
+            self.video_codec != null or
+            self.audio_codec != null;
+    }
+};
+
+pub const MediaProbeResult = struct {
+    status: ProbeStatus,
+    metadata: MediaMetadata = .{},
+    message: ?[]const u8 = null,
+
+    pub fn deinitOwned(self: *MediaProbeResult, allocator: std.mem.Allocator) void {
+        self.metadata.deinitOwned(allocator);
+        if (self.message) |value| allocator.free(value);
+        self.* = .{ .status = .unprobed };
+    }
+};
+
 pub const MediaAsset = struct {
     id: AssetId,
     display_name: []const u8,
     source_path: []const u8,
     kind: MediaKind,
     status: MediaStatus,
+    probe_status: ProbeStatus = .unprobed,
+    metadata: MediaMetadata = .{},
     duration_seconds: ?f64 = null,
     dimensions: ?Dimensions = null,
     import_order: u64 = 0,
@@ -316,6 +384,8 @@ test "media asset constructors assign deterministic status" {
     try std.testing.expectEqualStrings("B Roll.webm", asset.display_name);
     try std.testing.expectEqual(MediaKind.video, asset.kind);
     try std.testing.expectEqual(MediaStatus.available, asset.status);
+    try std.testing.expectEqual(ProbeStatus.unprobed, asset.probe_status);
+    try std.testing.expect(!asset.metadata.hasKnownFields());
     try std.testing.expectEqual(@as(u64, 3), asset.import_order);
     try std.testing.expectEqual(@as(?f64, null), asset.duration_seconds);
     try std.testing.expectEqual(@as(?Dimensions, null), asset.dimensions);
@@ -357,5 +427,15 @@ test "missing files can also be represented as offline assets" {
     try std.testing.expectEqualStrings("scene with spaces.srt", offline_asset.display_name);
     try std.testing.expectEqual(MediaKind.subtitle, offline_asset.kind);
     try std.testing.expectEqual(MediaStatus.missing, offline_asset.status);
+    try std.testing.expectEqual(ProbeStatus.unprobed, offline_asset.probe_status);
+    try std.testing.expect(!offline_asset.metadata.hasKnownFields());
     try std.testing.expectEqual(@as(u64, 12), offline_asset.import_order);
+}
+
+test "frame rates reject zero denominators and expose decimal value" {
+    try std.testing.expectEqual(@as(?FrameRate, null), FrameRate.init(0, 1));
+    try std.testing.expectEqual(@as(?FrameRate, null), FrameRate.init(30000, 0));
+
+    const rate = FrameRate.init(30000, 1001).?;
+    try std.testing.expectApproxEqAbs(@as(f64, 29.97002997002997), rate.asFloat(), 0.0000001);
 }

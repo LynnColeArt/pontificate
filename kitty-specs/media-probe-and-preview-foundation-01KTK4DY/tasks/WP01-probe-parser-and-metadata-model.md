@@ -101,3 +101,7 @@ Pontificate currently classifies media by extension and stores optional duration
 ## Reviewer Guidance
 
 Review the parser for overfitting, status clarity, and safe handling of `N/A` or missing values. Run `zig build test`.
+
+## Activity Log
+
+- 2026-06-08T08:30:00Z - codex - Implemented probe metadata types, deterministic `ffprobe` JSON parser, parser fixture tests, and build-test wiring; validation: `zig build test`.
