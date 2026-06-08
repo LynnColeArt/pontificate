@@ -10,6 +10,8 @@ pub const ProjectError = error{
     AssetIndexOutOfBounds,
 };
 
+pub const ProjectEditError = timeline_model.EditClipError;
+
 pub const Project = struct {
     allocator: std.mem.Allocator,
     id: []u8,
@@ -128,6 +130,8 @@ pub const Project = struct {
             try json.write(clip.id.value);
             try json.objectField("asset_id");
             try json.write(clip.asset_id.value);
+            try json.objectField("media_kind");
+            try json.write(clip.media_kind);
             try json.objectField("track_id");
             try json.write(clip.track_id.value);
             try json.objectField("track_index");
@@ -142,6 +146,19 @@ pub const Project = struct {
             try json.write(clip.opacity);
             try json.objectField("blend_mode");
             try json.write(clip.blend_mode);
+            try json.objectField("opacity_keyframes");
+            try json.beginArray();
+            for (clip.opacity_keyframes) |keyframe| {
+                try json.beginObject();
+                try json.objectField("time");
+                try json.write(keyframe.time);
+                try json.objectField("value");
+                try json.write(keyframe.value);
+                try json.objectField("interpolation");
+                try json.write(keyframe.interpolation);
+                try json.endObject();
+            }
+            try json.endArray();
             try json.endObject();
         }
         try json.endArray();
@@ -204,9 +221,18 @@ pub const Project = struct {
         project.next_asset_id = max_id + 1;
 
         for (parsed.value.timeline.clips) |clip| {
+            const asset_id = media.AssetId.init(clip.asset_id);
+            const restored_media_kind = if (clip.media_kind == .unknown)
+                (project.assetById(asset_id) orelse return ProjectError.AssetIndexOutOfBounds).kind
+            else
+                clip.media_kind;
+            const keyframes = try ownedOpacityKeyframesFromSerialized(allocator, clip.opacity_keyframes, clip.duration);
+            defer if (keyframes.len > 0) allocator.free(keyframes);
+
             _ = try project.timeline.restoreClip(.{
                 .id = timeline_model.ClipId.init(clip.id),
-                .asset_id = media.AssetId.init(clip.asset_id),
+                .asset_id = asset_id,
+                .media_kind = restored_media_kind,
                 .track_id = timeline_model.TrackId.init(clip.track_id),
                 .track_index = clip.track_index,
                 .timeline_start = clip.timeline_start,
@@ -214,6 +240,7 @@ pub const Project = struct {
                 .duration = clip.duration,
                 .opacity = clip.opacity,
                 .blend_mode = clip.blend_mode,
+                .opacity_keyframes = keyframes,
             });
         }
 
@@ -234,6 +261,43 @@ pub const Project = struct {
             .display_name = asset.display_name,
             .duration_seconds = asset.duration_seconds,
         }, placement);
+    }
+
+    pub fn splitClip(self: *Project, clip_index: usize, split_time: timeline_model.Seconds) ProjectEditError!timeline_model.TimelineClip {
+        return self.timeline.splitClip(clip_index, split_time);
+    }
+
+    pub fn trimClip(
+        self: *Project,
+        clip_index: usize,
+        trim: timeline_model.ClipTrim,
+    ) ProjectEditError!timeline_model.TimelineClip {
+        return self.timeline.trimClip(clip_index, trim);
+    }
+
+    pub fn moveClip(
+        self: *Project,
+        clip_index: usize,
+        move: timeline_model.ClipMove,
+    ) ProjectEditError!timeline_model.TimelineClip {
+        return self.timeline.moveClip(clip_index, move);
+    }
+
+    pub fn setClipOpacityKeyframe(
+        self: *Project,
+        clip_index: usize,
+        time: timeline_model.Seconds,
+        value: f32,
+    ) ProjectEditError!void {
+        return self.timeline.setOpacityKeyframe(clip_index, time, value);
+    }
+
+    pub fn evaluateClipOpacity(
+        self: Project,
+        clip_index: usize,
+        time: timeline_model.Seconds,
+    ) ProjectEditError!f32 {
+        return self.timeline.evaluateOpacityAt(clip_index, time);
     }
 
     pub fn clipCount(self: Project) usize {
@@ -281,6 +345,7 @@ const SerializedAsset = struct {
 const SerializedClip = struct {
     id: u64,
     asset_id: u64,
+    media_kind: media.MediaKind = .unknown,
     track_id: u64,
     track_index: usize,
     timeline_start: f64,
@@ -288,6 +353,13 @@ const SerializedClip = struct {
     duration: f64,
     opacity: f32 = 1.0,
     blend_mode: timeline_model.BlendMode = .normal,
+    opacity_keyframes: []SerializedKeyframe = &.{},
+};
+
+const SerializedKeyframe = struct {
+    time: f64,
+    value: f32,
+    interpolation: timeline_model.KeyframeInterpolation = .linear,
 };
 
 pub fn pathExists(io: std.Io, source_path: []const u8) bool {
@@ -304,6 +376,46 @@ fn revalidatedStatus(
     if (kind == .unknown or persisted_status == .unsupported) return .unsupported;
     if (pathExists(io, source_path)) return .available;
     return .missing;
+}
+
+fn ownedOpacityKeyframesFromSerialized(
+    allocator: std.mem.Allocator,
+    serialized: []const SerializedKeyframe,
+    clip_duration: f64,
+) ![]timeline_model.ScalarKeyframe {
+    if (serialized.len == 0) return &.{};
+
+    const keyframes = try allocator.alloc(timeline_model.ScalarKeyframe, serialized.len);
+    errdefer allocator.free(keyframes);
+
+    var previous_time: ?f64 = null;
+    for (serialized, 0..) |keyframe, index| {
+        try validateSerializedKeyframe(keyframe, clip_duration, previous_time);
+        keyframes[index] = .{
+            .time = keyframe.time,
+            .value = keyframe.value,
+            .interpolation = keyframe.interpolation,
+        };
+        previous_time = keyframe.time;
+    }
+
+    return keyframes;
+}
+
+fn validateSerializedKeyframe(
+    keyframe: SerializedKeyframe,
+    clip_duration: f64,
+    previous_time: ?f64,
+) timeline_model.ClipEditError!void {
+    if (!std.math.isFinite(keyframe.time) or keyframe.time < 0.0 or keyframe.time > clip_duration) {
+        return timeline_model.ClipEditError.InvalidKeyframe;
+    }
+    if (!std.math.isFinite(keyframe.value) or keyframe.value < 0.0 or keyframe.value > 1.0) {
+        return timeline_model.ClipEditError.InvalidKeyframe;
+    }
+    if (previous_time) |time| {
+        if (keyframe.time <= time) return timeline_model.ClipEditError.InvalidKeyframe;
+    }
 }
 
 fn writeTestFile(dir: std.Io.Dir, path: []const u8, data: []const u8) !void {
@@ -431,6 +543,168 @@ test "project JSON round trip preserves asset fields" {
     try std.testing.expectEqual(@as(f64, 0.5), summary.source_in);
     try std.testing.expectEqual(@as(f64, 12.5), summary.duration);
     try std.testing.expectEqual(@as(?timeline_model.ClipSummary, null), loaded.clipSummary(1));
+}
+
+test "project editing methods wrap timeline operations and keep assets stable" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var project = try Project.init(std.testing.allocator, "project-edits");
+    defer project.deinit();
+
+    const imported = try importSingleFixture(&project, tmp, "edit.mp4");
+    defer std.testing.allocator.free(imported.source_path);
+    _ = try project.addAssetToTimeline(0, .{ .timeline_start = 0.0, .duration_seconds = 5.0 });
+    try project.setClipOpacityKeyframe(0, 0.0, 0.0);
+    try project.setClipOpacityKeyframe(0, 5.0, 1.0);
+
+    const right = try project.splitClip(0, 2.0);
+    try std.testing.expectEqual(@as(u64, 2), right.id.value);
+    _ = try project.trimClip(1, .{ .timeline_start = 2.0, .source_in = 2.0, .duration = 2.0 });
+    _ = try project.moveClip(1, .{ .track_index = 0, .timeline_start = 3.0 });
+
+    try std.testing.expectEqual(@as(usize, 1), project.assets.items.len);
+    try std.testing.expectEqual(@as(u64, 1), project.assets.items[0].id.value);
+    try std.testing.expectEqualStrings(imported.source_path, project.assets.items[0].source_path);
+    try std.testing.expectEqual(@as(usize, 2), project.clipCount());
+
+    const first = project.clipSummary(0).?;
+    const second = project.clipSummary(1).?;
+    try std.testing.expectEqual(@as(u64, 1), first.clip_id.value);
+    try std.testing.expectEqual(@as(f64, 0.0), first.timeline_start);
+    try std.testing.expectEqual(@as(f64, 2.0), first.duration);
+    try std.testing.expectEqual(@as(u64, 2), second.clip_id.value);
+    try std.testing.expectEqual(@as(f64, 3.0), second.timeline_start);
+    try std.testing.expectEqual(@as(f64, 2.0), second.source_in);
+    try std.testing.expectEqual(@as(f64, 2.0), second.duration);
+    try std.testing.expectApproxEqAbs(@as(f32, 0.2), try project.evaluateClipOpacity(0, 1.0), 0.0001);
+    try std.testing.expectApproxEqAbs(@as(f32, 0.6), try project.evaluateClipOpacity(1, 1.0), 0.0001);
+}
+
+test "project JSON round trip preserves edited clips and opacity keyframes" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var project = try Project.init(std.testing.allocator, "project-edit-round-trip");
+    defer project.deinit();
+
+    const imported = try importSingleFixture(&project, tmp, "keyframed.webm");
+    defer std.testing.allocator.free(imported.source_path);
+    _ = try project.addAssetToTimeline(0, .{ .timeline_start = 0.0, .duration_seconds = 5.0 });
+    try project.setClipOpacityKeyframe(0, 0.0, 0.0);
+    try project.setClipOpacityKeyframe(0, 5.0, 1.0);
+    _ = try project.splitClip(0, 2.0);
+    _ = try project.trimClip(1, .{ .timeline_start = 2.0, .source_in = 2.0, .duration = 2.0 });
+    _ = try project.moveClip(1, .{ .track_index = 0, .timeline_start = 4.0 });
+
+    const json = try project.toOwnedJson(std.testing.allocator);
+    defer std.testing.allocator.free(json);
+    try std.testing.expect(std.mem.indexOf(u8, json, "\"opacity_keyframes\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, json, "\"media_kind\"") != null);
+
+    var loaded = try Project.loadFromSlice(std.testing.allocator, std.testing.io, json);
+    defer loaded.deinit();
+
+    try std.testing.expectEqual(@as(usize, 2), loaded.clipCount());
+    try std.testing.expectEqual(@as(u64, 3), loaded.timeline.next_clip_id);
+    try std.testing.expectEqual(media.MediaKind.video, loaded.timeline.clips.items[0].media_kind);
+    try std.testing.expectEqual(media.MediaKind.video, loaded.timeline.clips.items[1].media_kind);
+    try std.testing.expectEqual(@as(usize, 2), loaded.timeline.clips.items[0].opacity_keyframes.len);
+    try std.testing.expectEqual(@as(usize, 2), loaded.timeline.clips.items[1].opacity_keyframes.len);
+    try std.testing.expectApproxEqAbs(@as(f32, 0.2), try loaded.evaluateClipOpacity(0, 1.0), 0.0001);
+    try std.testing.expectApproxEqAbs(@as(f32, 0.6), try loaded.evaluateClipOpacity(1, 1.0), 0.0001);
+
+    const second = loaded.clipSummary(1).?;
+    try std.testing.expectEqual(@as(f64, 4.0), second.timeline_start);
+    try std.testing.expectEqual(@as(f64, 2.0), second.source_in);
+    try std.testing.expectEqual(@as(f64, 2.0), second.duration);
+}
+
+test "old schema clips without keyframes load with defaults" {
+    const json =
+        \\{
+        \\  "schema_version": 1,
+        \\  "project_id": "old-schema",
+        \\  "assets": [
+        \\    {
+        \\      "id": 4,
+        \\      "display_name": "legacy.mp4",
+        \\      "source_path": "legacy.mp4",
+        \\      "kind": "video",
+        \\      "status": "available",
+        \\      "duration_seconds": 4.0,
+        \\      "dimensions": null,
+        \\      "import_order": 0
+        \\    }
+        \\  ],
+        \\  "timeline": {
+        \\    "tracks": [],
+        \\    "clips": [
+        \\      {
+        \\        "id": 7,
+        \\        "asset_id": 4,
+        \\        "track_id": 1,
+        \\        "track_index": 0,
+        \\        "timeline_start": 1.0,
+        \\        "source_in": 0.5,
+        \\        "duration": 3.0,
+        \\        "opacity": 1.0,
+        \\        "blend_mode": "normal"
+        \\      }
+        \\    ]
+        \\  }
+        \\}
+    ;
+
+    var loaded = try Project.loadFromSlice(std.testing.allocator, std.testing.io, json);
+    defer loaded.deinit();
+
+    try std.testing.expectEqual(@as(usize, 1), loaded.clipCount());
+    try std.testing.expectEqual(@as(u64, 8), loaded.timeline.next_clip_id);
+    try std.testing.expectEqual(media.MediaKind.video, loaded.timeline.clips.items[0].media_kind);
+    try std.testing.expectEqual(@as(usize, 0), loaded.timeline.clips.items[0].opacity_keyframes.len);
+    try std.testing.expectEqual(@as(f32, 1.0), try loaded.evaluateClipOpacity(0, 1.0));
+}
+
+test "invalid project edits leave assets clips and keyframes unchanged" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var project = try Project.init(std.testing.allocator, "project-invalid-edits");
+    defer project.deinit();
+
+    const imported = try importSingleFixture(&project, tmp, "dialog.wav");
+    defer std.testing.allocator.free(imported.source_path);
+    _ = try project.addAssetToTimeline(0, .{ .timeline_start = 0.0, .duration_seconds = 3.0 });
+    try project.setClipOpacityKeyframe(0, 0.5, 0.5);
+
+    const before_asset_count = project.assets.items.len;
+    const before_clip = project.timeline.clips.items[0];
+    const before_keyframe = before_clip.opacity_keyframes[0];
+
+    try std.testing.expectError(
+        timeline_model.ClipEditError.IncompatibleTrack,
+        project.moveClip(0, .{ .track_index = 0, .timeline_start = 1.0 }),
+    );
+    try std.testing.expectError(
+        timeline_model.ClipEditError.InvalidKeyframe,
+        project.setClipOpacityKeyframe(0, 4.0, 0.25),
+    );
+    try std.testing.expectError(
+        timeline_model.ClipCreationError.InvalidTime,
+        project.trimClip(0, .{ .timeline_start = 0.0, .source_in = 0.0, .duration = 0.0 }),
+    );
+
+    try std.testing.expectEqual(before_asset_count, project.assets.items.len);
+    try std.testing.expectEqual(before_clip.id, project.timeline.clips.items[0].id);
+    try std.testing.expectEqual(before_clip.track_id, project.timeline.clips.items[0].track_id);
+    try std.testing.expectEqual(before_clip.track_index, project.timeline.clips.items[0].track_index);
+    try std.testing.expectEqual(before_clip.timeline_start, project.timeline.clips.items[0].timeline_start);
+    try std.testing.expectEqual(before_clip.source_in, project.timeline.clips.items[0].source_in);
+    try std.testing.expectEqual(before_clip.duration, project.timeline.clips.items[0].duration);
+    try std.testing.expectEqual(@as(usize, 1), project.timeline.clips.items[0].opacity_keyframes.len);
+    try std.testing.expectEqual(before_keyframe.time, project.timeline.clips.items[0].opacity_keyframes[0].time);
+    try std.testing.expectEqual(before_keyframe.value, project.timeline.clips.items[0].opacity_keyframes[0].value);
 }
 
 test "load marks missing persisted sources offline" {

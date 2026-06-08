@@ -1,13 +1,29 @@
 {
+  "accept_commit": "d1144f9673872932ede8e18332433517be0119b3",
+  "acceptance_history": [
+    {
+      "accept_commit": "d1144f9673872932ede8e18332433517be0119b3",
+      "acceptance_mode": "pr",
+      "accepted_at": "2026-06-08T07:38:09.352854+00:00",
+      "accepted_by": "codex",
+      "accepted_from_commit": "3adb25d0594f34a5e2aec8ab31364ff82b61c49b"
+    }
+  ],
+  "acceptance_mode": "pr",
+  "accepted_at": "2026-06-08T07:38:09.352854+00:00",
+  "accepted_by": "codex",
+  "accepted_from_commit": "3adb25d0594f34a5e2aec8ab31364ff82b61c49b",
   "coordination_branch": "kitty/mission-timeline-editing-and-keyframe-engine-01KTJVYN",
   "created_at": "2026-06-08T05:40:40.734180+00:00",
   "friendly_name": "timeline editing and keyframe engine",
   "mission_id": "01KTJVYNMXPYZGD3WGKEZESX6T",
-  "mission_number": null,
+  "mission_number": 2,
   "mission_slug": "timeline-editing-and-keyframe-engine-01KTJVYN",
   "mission_type": "software-dev",
   "purpose_context": "This mission advances timeline editing and keyframe engine on main so stakeholders can track the work from mission creation onward.",
   "purpose_tldr": "timeline editing and keyframe engine",
   "slug": "timeline-editing-and-keyframe-engine-01KTJVYN",
-  "target_branch": "main"
+  "target_branch": "main",
+  "vcs": "git",
+  "vcs_locked_at": "2026-06-08T06:49:12.187780+00:00"
 }

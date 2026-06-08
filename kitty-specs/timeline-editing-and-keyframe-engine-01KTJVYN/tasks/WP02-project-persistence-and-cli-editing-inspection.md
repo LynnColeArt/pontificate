@@ -15,13 +15,17 @@ tracker_refs: []
 planning_base_branch: main
 merge_target_branch: main
 branch_strategy: Planning artifacts for this mission were generated on main. During /spec-kitty.implement this WP may branch from a dependency-specific base, but completed changes must merge back into main unless the human explicitly redirects the landing branch.
+base_branch: kitty/mission-timeline-editing-and-keyframe-engine-01KTJVYN
+base_commit: 0c4ab13b3109addb9ab0890f83cb4221822d4e22
+created_at: '2026-06-08T07:06:37.310004+00:00'
 subtasks:
 - T008
 - T009
 - T010
 - T011
 - T012
-agent: codex
+agent: "codex"
+shell_pid: "2943638"
 history: []
 agent_profile: implementer-ivan
 authoritative_surface: core/src/
@@ -126,3 +130,8 @@ Integrate WP01 timeline edit/keyframe behavior into the project model, JSON save
 Focus on JSON compatibility, project/timeline responsibility boundaries, and whether failed project-level edits leave state unchanged. Run `zig build test` and `zig build run`.
 
 Implementation command: `spec-kitty agent action implement WP02 --agent <name>`
+
+## Activity Log
+
+- 2026-06-08T07:10:34Z – codex – shell_pid=2943638 – Implemented project edit wrappers, JSON media_kind/keyframe persistence, schema-1 compatibility, and CLI inspect clip opacity output; validation: zig build test, zig build run, git diff --check.
+- 2026-06-08T07:11:00Z – codex – shell_pid=2943638 – Started review via action command

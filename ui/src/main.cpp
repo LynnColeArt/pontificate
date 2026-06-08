@@ -6,11 +6,13 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFrame>
+#include <QFormLayout>
 #include <QGraphicsDropShadowEffect>
 #include <QGraphicsRectItem>
 #include <QGraphicsScene>
 #include <QGraphicsSimpleTextItem>
 #include <QGraphicsView>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
@@ -23,6 +25,7 @@
 #include <QSplitter>
 #include <QStatusBar>
 #include <QStyle>
+#include <QSpinBox>
 #include <QTabWidget>
 #include <QToolBar>
 #include <QVBoxLayout>
@@ -439,6 +442,106 @@ int main(int argc, char *argv[]) {
     inspectorDock->setMinimumWidth(260);
     window.addDockWidget(Qt::RightDockWidgetArea, inspectorDock);
 
+    int selectedClipIndex = -1;
+
+    auto *editPanel = new QWidget;
+    auto *editLayout = new QVBoxLayout(editPanel);
+    editLayout->setContentsMargins(12, 12, 12, 12);
+    editLayout->setSpacing(10);
+
+    auto *selectedClipLabel = new QLabel("No clip selected");
+    selectedClipLabel->setWordWrap(true);
+
+    auto *clipIndexSpin = new QSpinBox;
+    clipIndexSpin->setRange(0, 0);
+    clipIndexSpin->setEnabled(false);
+    clipIndexSpin->setToolTip("Current sorted clip index");
+
+    auto *selectionForm = new QFormLayout;
+    selectionForm->addRow("Clip", clipIndexSpin);
+
+    auto *splitTime = new QDoubleSpinBox;
+    splitTime->setRange(0.0, 36000.0);
+    splitTime->setDecimals(3);
+    splitTime->setSingleStep(0.25);
+    splitTime->setValue(1.0);
+    auto *splitButton = new QPushButton("Split");
+
+    auto *trimStart = new QDoubleSpinBox;
+    trimStart->setRange(0.0, 36000.0);
+    trimStart->setDecimals(3);
+    trimStart->setSingleStep(0.25);
+    auto *trimSourceIn = new QDoubleSpinBox;
+    trimSourceIn->setRange(0.0, 36000.0);
+    trimSourceIn->setDecimals(3);
+    trimSourceIn->setSingleStep(0.25);
+    auto *trimDuration = new QDoubleSpinBox;
+    trimDuration->setRange(0.001, 36000.0);
+    trimDuration->setDecimals(3);
+    trimDuration->setSingleStep(0.25);
+    trimDuration->setValue(1.0);
+    auto *trimButton = new QPushButton("Trim");
+
+    auto *moveTrack = new QSpinBox;
+    moveTrack->setRange(0, 3);
+    auto *moveStart = new QDoubleSpinBox;
+    moveStart->setRange(0.0, 36000.0);
+    moveStart->setDecimals(3);
+    moveStart->setSingleStep(0.25);
+    auto *moveButton = new QPushButton("Move");
+
+    auto *keyTime = new QDoubleSpinBox;
+    keyTime->setRange(0.0, 36000.0);
+    keyTime->setDecimals(3);
+    keyTime->setSingleStep(0.25);
+    auto *keyOpacity = new QDoubleSpinBox;
+    keyOpacity->setRange(0.0, 1.0);
+    keyOpacity->setDecimals(3);
+    keyOpacity->setSingleStep(0.05);
+    keyOpacity->setValue(1.0);
+    auto *setKeyButton = new QPushButton("Set Opacity Key");
+    auto *evalOpacityButton = new QPushButton("Evaluate Opacity");
+
+    auto *splitGroup = new QGroupBox("Split");
+    auto *splitForm = new QFormLayout(splitGroup);
+    splitForm->addRow("Time", splitTime);
+    splitForm->addRow(splitButton);
+
+    auto *trimGroup = new QGroupBox("Trim");
+    auto *trimForm = new QFormLayout(trimGroup);
+    trimForm->addRow("Start", trimStart);
+    trimForm->addRow("Source In", trimSourceIn);
+    trimForm->addRow("Duration", trimDuration);
+    trimForm->addRow(trimButton);
+
+    auto *moveGroup = new QGroupBox("Move");
+    auto *moveForm = new QFormLayout(moveGroup);
+    moveForm->addRow("Track", moveTrack);
+    moveForm->addRow("Start", moveStart);
+    moveForm->addRow(moveButton);
+
+    auto *keyGroup = new QGroupBox("Opacity");
+    auto *keyForm = new QFormLayout(keyGroup);
+    keyForm->addRow("Time", keyTime);
+    keyForm->addRow("Value", keyOpacity);
+    keyForm->addRow(setKeyButton);
+    keyForm->addRow(evalOpacityButton);
+
+    editLayout->addWidget(selectedClipLabel);
+    editLayout->addLayout(selectionForm);
+    editLayout->addWidget(splitGroup);
+    editLayout->addWidget(trimGroup);
+    editLayout->addWidget(moveGroup);
+    editLayout->addWidget(keyGroup);
+    editLayout->addStretch();
+
+    auto *editDock = new QDockWidget("Edit", &window);
+    editDock->setWidget(editPanel);
+    editDock->setMinimumWidth(260);
+    window.addDockWidget(Qt::RightDockWidgetArea, editDock);
+    window.tabifyDockWidget(inspectorDock, editDock);
+    editDock->raise();
+
     TimelineView *timeline = nullptr;
     auto *splitter = new QSplitter(Qt::Vertical);
     splitter->addWidget(makePreviewPane());
@@ -503,6 +606,42 @@ int main(int argc, char *argv[]) {
         window.statusBar()->showMessage(message, 6000);
     };
 
+    auto selectedClipCount = [&]() -> uint32_t {
+        return project.get() ? pontificate_project_clip_count(project.get()) : 0;
+    };
+
+    auto selectedClipValid = [&]() {
+        return selectedClipIndex >= 0 && static_cast<uint32_t>(selectedClipIndex) < selectedClipCount();
+    };
+
+    auto updateEditControls = [&]() {
+        const uint32_t count = selectedClipCount();
+        const bool hasClips = count > 0;
+        if (!hasClips) {
+            selectedClipIndex = -1;
+            selectedClipLabel->setText("No clip selected");
+            clipIndexSpin->setEnabled(false);
+        } else {
+            if (selectedClipIndex < 0 || static_cast<uint32_t>(selectedClipIndex) >= count) {
+                selectedClipIndex = static_cast<int>(count - 1);
+            }
+            clipIndexSpin->blockSignals(true);
+            clipIndexSpin->setRange(0, static_cast<int>(count - 1));
+            clipIndexSpin->setValue(selectedClipIndex);
+            clipIndexSpin->setEnabled(true);
+            clipIndexSpin->blockSignals(false);
+            selectedClipLabel->setText(QString("Selected clip index %1 of %2").arg(selectedClipIndex).arg(count - 1));
+        }
+
+        const bool enabled = hasClips && project.get();
+        splitButton->setEnabled(enabled);
+        trimButton->setEnabled(enabled);
+        moveButton->setEnabled(enabled);
+        setKeyButton->setEnabled(enabled);
+        evalOpacityButton->setEnabled(enabled);
+    };
+    updateEditControls();
+
     auto addSelectedAssetToTimeline = [&]() {
         if (!project.get()) {
             showStatus("Core project unavailable");
@@ -516,7 +655,10 @@ int main(int argc, char *argv[]) {
         const uint32_t assetIndex = item->data(Qt::UserRole).toUInt();
         const uint32_t status = pontificate_project_add_asset_to_timeline(project.get(), assetIndex);
         if (status == PONTIFICATE_STATUS_OK) {
+            const uint32_t count = pontificate_project_clip_count(project.get());
+            selectedClipIndex = count > 0 ? static_cast<int>(count - 1) : -1;
             refreshTimeline();
+            updateEditControls();
             showStatus(QString("Added asset %1 to timeline").arg(assetIndex + 1));
         } else {
             showStatus(QString("Could not add asset: %1").arg(statusName(status)));
@@ -530,6 +672,84 @@ int main(int argc, char *argv[]) {
         addSelectedAssetToTimeline();
     });
     QObject::connect(addToTimelineAction, &QAction::triggered, &window, addSelectedAssetToTimeline);
+    QObject::connect(clipIndexSpin, QOverload<int>::of(&QSpinBox::valueChanged), &window, [&](int value) {
+        selectedClipIndex = value;
+        updateEditControls();
+    });
+
+    auto runClipEdit = [&](const QString &success, const auto &operation) {
+        if (!project.get()) {
+            showStatus("Core project unavailable");
+            return;
+        }
+        if (!selectedClipValid()) {
+            showStatus("Select a timeline clip first");
+            return;
+        }
+        const uint32_t status = operation(static_cast<uint32_t>(selectedClipIndex));
+        if (status == PONTIFICATE_STATUS_OK) {
+            refreshTimeline();
+            updateEditControls();
+            showStatus(success);
+        } else {
+            showStatus(QString("Edit failed: %1").arg(statusName(status)));
+        }
+    };
+
+    QObject::connect(splitButton, &QPushButton::clicked, &window, [&]() {
+        runClipEdit("Split clip", [&](uint32_t clipIndex) {
+            return pontificate_project_split_clip(project.get(), clipIndex, splitTime->value());
+        });
+    });
+    QObject::connect(trimButton, &QPushButton::clicked, &window, [&]() {
+        runClipEdit("Trimmed clip", [&](uint32_t clipIndex) {
+            return pontificate_project_trim_clip(
+                project.get(),
+                clipIndex,
+                trimStart->value(),
+                trimSourceIn->value(),
+                trimDuration->value());
+        });
+    });
+    QObject::connect(moveButton, &QPushButton::clicked, &window, [&]() {
+        runClipEdit("Moved clip", [&](uint32_t clipIndex) {
+            return pontificate_project_move_clip(
+                project.get(),
+                clipIndex,
+                static_cast<uint32_t>(moveTrack->value()),
+                moveStart->value());
+        });
+    });
+    QObject::connect(setKeyButton, &QPushButton::clicked, &window, [&]() {
+        runClipEdit("Set opacity keyframe", [&](uint32_t clipIndex) {
+            return pontificate_project_set_clip_opacity_keyframe(
+                project.get(),
+                clipIndex,
+                keyTime->value(),
+                keyOpacity->value());
+        });
+    });
+    QObject::connect(evalOpacityButton, &QPushButton::clicked, &window, [&]() {
+        if (!project.get()) {
+            showStatus("Core project unavailable");
+            return;
+        }
+        if (!selectedClipValid()) {
+            showStatus("Select a timeline clip first");
+            return;
+        }
+        uint32_t status = PONTIFICATE_STATUS_OK;
+        const double opacity = pontificate_project_evaluate_clip_opacity(
+            project.get(),
+            static_cast<uint32_t>(selectedClipIndex),
+            keyTime->value(),
+            &status);
+        if (status == PONTIFICATE_STATUS_OK) {
+            showStatus(QString("Opacity at %1s: %2").arg(keyTime->value(), 0, 'f', 3).arg(opacity, 0, 'f', 3));
+        } else {
+            showStatus(QString("Opacity evaluation failed: %1").arg(statusName(status)));
+        }
+    });
 
     QObject::connect(importAction, &QAction::triggered, &window, [&]() {
         if (!project.get()) {
@@ -609,6 +829,7 @@ int main(int argc, char *argv[]) {
         }
         project.reset(loaded);
         refreshAll();
+        updateEditControls();
         showStatus(QString("Opened %1").arg(path));
     });
 
@@ -620,6 +841,7 @@ int main(int argc, char *argv[]) {
         openAction->setEnabled(false);
     } else {
         refreshAll();
+        updateEditControls();
         window.statusBar()->showMessage(QString("core %1 | %2 | midpoint opacity %3")
                                             .arg(pontificate_version())
                                             .arg(pontificate_default_project_summary())

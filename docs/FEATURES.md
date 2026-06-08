@@ -11,21 +11,35 @@ Pontificate is Linux-first video editing without the usual rough edges. The edit
 - Missing/offline media status preserved in project state.
 - JSON project save/load with schema version `1`.
 - Default timeline tracks for video, audio, subtitles, and adjustment/grade.
-- Asset-backed timeline clips with asset references, start time, source in, duration, opacity placeholder, and blend mode placeholder.
-- C ABI with opaque project handles and caller-owned summary buffers for media and timeline rows.
+- Asset-backed timeline clips with asset references, media kind, start time, source in, duration, opacity, opacity keyframes, and blend mode placeholder.
+- Deterministic core timeline edits for split, trim, and move.
+- Scalar opacity keyframe insertion, replacement, preservation through split/trim, and interpolation.
+- Project JSON persistence for clip `media_kind` and `opacity_keyframes`, with backwards-compatible loading for older schema-1 clips that do not contain keyframes.
+- C ABI with opaque project handles, caller-owned summary buffers for media and timeline rows, and edit calls for split, trim, move, opacity keyframe set, and opacity evaluation.
 - Qt Library rows populated from core summaries.
 - Qt action to add a selected Library asset to the timeline.
-- Timeline rendering from core clip summaries while preserving the existing zoom slider behavior.
+- Timeline rendering from core clip summaries while preserving the existing zoom slider behavior after redraws.
+- Qt Edit dock controls for selected-clip split, trim, move, opacity keyframe set, and opacity evaluation.
 - Open/save dialogs for JSON project smoke workflows.
+- CLI output for available edit/keyframe operations plus saved-project clip inspection.
 - Core validation through Zig tests plus CMake/Qt build validation.
 
 ## Editing
+
+Implemented editing foundation:
+
+- split a clip at a clip-local time
+- trim a clip by setting timeline start, source in-point, and duration
+- move a clip to a compatible track and timeline start
+- reject invalid edit inputs without partial mutation
+- refresh Qt clip selection and timeline summaries after successful edits
+- preserve timeline zoom while redrawing edited clips
 
 Planned editing scope:
 
 - media library with bins, metadata, search, thumbnails, and missing-media relinking
 - layered video, audio, subtitle, and adjustment tracks
-- cuts, trims, split edits, clip cropping, transforms, opacity, fades, and blend modes
+- trim handles, ripple edits, roll/slip/slide edits, clip cropping, transforms, fades, and editable blend modes
 - timeline zoom, pan, snapping, ripple delete, in/out ranges, markers, and stable playhead navigation
 - linked and unlinked audio-video editing
 - track mute, solo, lock, visibility, and enable controls
@@ -40,7 +54,7 @@ Keyframes are a core primitive, not a late effect feature.
 property path + time + value + interpolation
 ```
 
-This should drive transform, crop, opacity, blend amount, transition progress, color controls, subtitle position, subtitle style overrides, and future masks.
+The shipped keyframe property is scalar clip opacity. The same model should later drive transform, crop, blend amount, transition progress, color controls, subtitle position, subtitle style overrides, and masks.
 
 ## Color Darkroom
 
@@ -55,7 +69,12 @@ Future work:
 
 ## Subtitles
 
-Future work beyond basic subtitle file classification:
+Implemented subtitle foundation:
+
+- subtitle files are classified as media assets by extension
+- imported subtitle assets can be placed on the default subtitle track as reference-based timeline clips
+
+Future work:
 
 - import and export SRT, VTT, and ASS/SSA where practical
 - edit subtitles in place on the timeline and in a text-focused panel
@@ -80,7 +99,9 @@ Future work:
 Partially started:
 
 - stable project format with schema versioning
+- backwards-compatible loading for schema-1 timeline clips without keyframes
 - graceful offline media records for missing sources
+- atomic validation for invalid split, trim, move, and opacity keyframe operations
 
 Future work:
 

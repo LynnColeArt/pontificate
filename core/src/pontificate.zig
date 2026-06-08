@@ -9,7 +9,7 @@ pub const timeline = timeline_model;
 
 pub const version = "0.0.1";
 pub const default_project_summary =
-    "4 tracks, 3 starter clips, 2 subtitle cues, keyframed opacity/color/transform";
+    "4 tracks, 3 starter clips, 2 subtitle cues, opacity keyframes";
 
 pub const Time = f64;
 
@@ -147,7 +147,7 @@ pub fn defaultProjectStats() ProjectStats {
         .tracks = @intCast(timeline_model.defaultTracks().len),
         .clips = default_clips.len,
         .subtitle_cues = default_subtitles.len,
-        .keyframed_properties = 3,
+        .keyframed_properties = 1,
     };
 }
 
@@ -286,7 +286,8 @@ fn statusFromError(err: anyerror) AbiStatus {
         error.AssetIndexOutOfBounds => .out_of_range,
         error.MissingAsset => .missing,
         error.UnsupportedAsset => .unsupported,
-        error.InvalidTrack, error.InvalidTime => .invalid,
+        error.ClipIndexOutOfBounds => .out_of_range,
+        error.InvalidTrack, error.InvalidTime, error.IncompatibleTrack, error.InvalidKeyframe => .invalid,
         error.NoSpaceLeft => .buffer_too_small,
         else => .io_error,
     };
@@ -418,6 +419,80 @@ export fn pontificate_project_clip_summary(
     );
 }
 
+export fn pontificate_project_split_clip(
+    project_ptr: ?*anyopaque,
+    clip_index: u32,
+    split_time: f64,
+) u32 {
+    const handle = handleFromOpaque(project_ptr) orelse return statusCode(.null_argument);
+    _ = handle.project.splitClip(@intCast(clip_index), split_time) catch |err| return statusCode(statusFromError(err));
+    return statusCode(.ok);
+}
+
+export fn pontificate_project_trim_clip(
+    project_ptr: ?*anyopaque,
+    clip_index: u32,
+    timeline_start: f64,
+    source_in: f64,
+    duration: f64,
+) u32 {
+    const handle = handleFromOpaque(project_ptr) orelse return statusCode(.null_argument);
+    _ = handle.project.trimClip(@intCast(clip_index), .{
+        .timeline_start = timeline_start,
+        .source_in = source_in,
+        .duration = duration,
+    }) catch |err| return statusCode(statusFromError(err));
+    return statusCode(.ok);
+}
+
+export fn pontificate_project_move_clip(
+    project_ptr: ?*anyopaque,
+    clip_index: u32,
+    track_index: u32,
+    timeline_start: f64,
+) u32 {
+    const handle = handleFromOpaque(project_ptr) orelse return statusCode(.null_argument);
+    _ = handle.project.moveClip(@intCast(clip_index), .{
+        .track_index = @intCast(track_index),
+        .timeline_start = timeline_start,
+    }) catch |err| return statusCode(statusFromError(err));
+    return statusCode(.ok);
+}
+
+export fn pontificate_project_set_clip_opacity_keyframe(
+    project_ptr: ?*anyopaque,
+    clip_index: u32,
+    clip_time: f64,
+    value: f64,
+) u32 {
+    const handle = handleFromOpaque(project_ptr) orelse return statusCode(.null_argument);
+    _ = handle.project.setClipOpacityKeyframe(
+        @intCast(clip_index),
+        clip_time,
+        @floatCast(value),
+    ) catch |err| return statusCode(statusFromError(err));
+    return statusCode(.ok);
+}
+
+export fn pontificate_project_evaluate_clip_opacity(
+    project_ptr: ?*const anyopaque,
+    clip_index: u32,
+    clip_time: f64,
+    status_out: ?*u32,
+) f64 {
+    const status = status_out orelse return 0.0;
+    const handle = constHandleFromOpaque(project_ptr) orelse {
+        status.* = statusCode(.null_argument);
+        return 0.0;
+    };
+    const opacity = handle.project.evaluateClipOpacity(@intCast(clip_index), clip_time) catch |err| {
+        status.* = statusCode(statusFromError(err));
+        return 0.0;
+    };
+    status.* = statusCode(.ok);
+    return opacity;
+}
+
 test "linear keyframes interpolate and clamp" {
     try std.testing.expectEqual(@as(f64, 0.0), evaluateLinear(0, 1, 10, 20, 5));
     try std.testing.expectEqual(@as(f64, 0.5), evaluateLinear(0, 1, 10, 20, 15));
@@ -495,6 +570,76 @@ test "project C ABI imports summarizes clips and round trips persistence" {
     defer pontificate_project_destroy(loaded);
     try std.testing.expectEqual(@as(u32, 1), pontificate_project_asset_count(loaded));
     try std.testing.expectEqual(@as(u32, 1), pontificate_project_clip_count(loaded));
+}
+
+test "project C ABI edits clips and evaluates opacity" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "edit.mp4", .data = "fixture" });
+
+    const source_path = try tmpProjectPathZ(std.testing.allocator, tmp, "edit.mp4");
+    defer std.testing.allocator.free(source_path);
+
+    const handle = pontificate_project_create().?;
+    defer pontificate_project_destroy(handle);
+
+    try std.testing.expectEqual(statusCode(.ok), pontificate_project_import_path(handle, source_path.ptr));
+    try std.testing.expectEqual(statusCode(.ok), pontificate_project_add_asset_to_timeline(handle, 0));
+    try std.testing.expectEqual(statusCode(.ok), pontificate_project_set_clip_opacity_keyframe(handle, 0, 0.0, 0.0));
+    try std.testing.expectEqual(statusCode(.ok), pontificate_project_set_clip_opacity_keyframe(handle, 0, 5.0, 1.0));
+    try std.testing.expectEqual(statusCode(.ok), pontificate_project_split_clip(handle, 0, 2.0));
+    try std.testing.expectEqual(@as(u32, 2), pontificate_project_clip_count(handle));
+    try std.testing.expectEqual(statusCode(.ok), pontificate_project_trim_clip(handle, 1, 2.0, 2.0, 2.0));
+    try std.testing.expectEqual(statusCode(.ok), pontificate_project_move_clip(handle, 1, 0, 4.0));
+
+    var status: u32 = 999;
+    const opacity = pontificate_project_evaluate_clip_opacity(handle, 1, 1.0, &status);
+    try std.testing.expectEqual(statusCode(.ok), status);
+    try std.testing.expectApproxEqAbs(@as(f64, 0.6), opacity, 0.0001);
+
+    var clip_buffer: [512]u8 = undefined;
+    try std.testing.expectEqual(
+        statusCode(.ok),
+        pontificate_project_clip_summary(handle, 1, clip_buffer[0..].ptr, clip_buffer.len),
+    );
+    const clip_text = bufferText(&clip_buffer);
+    try std.testing.expect(std.mem.indexOf(u8, clip_text, "start=4.000") != null);
+    try std.testing.expect(std.mem.indexOf(u8, clip_text, "source_in=2.000") != null);
+}
+
+test "project C ABI edit failures are explicit" {
+    try std.testing.expectEqual(statusCode(.null_argument), pontificate_project_split_clip(null, 0, 1.0));
+    try std.testing.expectEqual(statusCode(.null_argument), pontificate_project_trim_clip(null, 0, 0.0, 0.0, 1.0));
+    try std.testing.expectEqual(statusCode(.null_argument), pontificate_project_move_clip(null, 0, 0, 0.0));
+    try std.testing.expectEqual(statusCode(.null_argument), pontificate_project_set_clip_opacity_keyframe(null, 0, 0.0, 1.0));
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "dialog.wav", .data = "fixture" });
+
+    const source_path = try tmpProjectPathZ(std.testing.allocator, tmp, "dialog.wav");
+    defer std.testing.allocator.free(source_path);
+
+    const handle = pontificate_project_create().?;
+    defer pontificate_project_destroy(handle);
+
+    try std.testing.expectEqual(statusCode(.ok), pontificate_project_import_path(handle, source_path.ptr));
+    try std.testing.expectEqual(statusCode(.ok), pontificate_project_add_asset_to_timeline(handle, 0));
+    try std.testing.expectEqual(@as(u32, 1), pontificate_project_clip_count(handle));
+
+    try std.testing.expectEqual(statusCode(.out_of_range), pontificate_project_split_clip(handle, 9, 1.0));
+    try std.testing.expectEqual(statusCode(.invalid), pontificate_project_split_clip(handle, 0, 0.0));
+    try std.testing.expectEqual(statusCode(.invalid), pontificate_project_trim_clip(handle, 0, 0.0, 0.0, 0.0));
+    try std.testing.expectEqual(statusCode(.invalid), pontificate_project_move_clip(handle, 0, 0, 1.0));
+    try std.testing.expectEqual(statusCode(.invalid), pontificate_project_set_clip_opacity_keyframe(handle, 0, 6.0, 0.25));
+    try std.testing.expectEqual(@as(u32, 1), pontificate_project_clip_count(handle));
+
+    var status: u32 = 999;
+    try std.testing.expectEqual(@as(f64, 0.0), pontificate_project_evaluate_clip_opacity(null, 0, 0.0, &status));
+    try std.testing.expectEqual(statusCode(.null_argument), status);
+    try std.testing.expectEqual(@as(f64, 0.0), pontificate_project_evaluate_clip_opacity(handle, 9, 0.0, &status));
+    try std.testing.expectEqual(statusCode(.out_of_range), status);
+    try std.testing.expectEqual(@as(f64, 0.0), pontificate_project_evaluate_clip_opacity(handle, 0, 0.0, null));
 }
 
 test "project C ABI handles nulls ranges and small buffers" {

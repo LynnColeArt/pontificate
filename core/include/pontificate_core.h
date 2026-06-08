@@ -63,6 +63,34 @@ uint32_t pontificate_project_clip_summary(
     char *buffer,
     uint32_t buffer_len);
 
+/*
+ * Editing functions address clips by the current sorted clip index. Callers
+ * should refresh clip summaries after any successful edit because split and
+ * move operations can change clip order.
+ */
+uint32_t pontificate_project_split_clip(PontificateProject *project, uint32_t clip_index, double split_time);
+uint32_t pontificate_project_trim_clip(
+    PontificateProject *project,
+    uint32_t clip_index,
+    double timeline_start,
+    double source_in,
+    double duration);
+uint32_t pontificate_project_move_clip(
+    PontificateProject *project,
+    uint32_t clip_index,
+    uint32_t track_index,
+    double timeline_start);
+uint32_t pontificate_project_set_clip_opacity_keyframe(
+    PontificateProject *project,
+    uint32_t clip_index,
+    double clip_time,
+    double value);
+double pontificate_project_evaluate_clip_opacity(
+    const PontificateProject *project,
+    uint32_t clip_index,
+    double clip_time,
+    uint32_t *status_out);
+
 #ifdef __cplusplus
 }
 #endif

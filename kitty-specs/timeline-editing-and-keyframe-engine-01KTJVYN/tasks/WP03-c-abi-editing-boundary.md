@@ -12,12 +12,16 @@ tracker_refs: []
 planning_base_branch: main
 merge_target_branch: main
 branch_strategy: Planning artifacts for this mission were generated on main. During /spec-kitty.implement this WP may branch from a dependency-specific base, but completed changes must merge back into main unless the human explicitly redirects the landing branch.
+base_branch: kitty/mission-timeline-editing-and-keyframe-engine-01KTJVYN
+base_commit: 5239813cedaa1d46f5d1b198d6a0506c12b05d89
+created_at: '2026-06-08T07:12:54.791923+00:00'
 subtasks:
 - T013
 - T014
 - T015
 - T016
-agent: codex
+agent: "codex"
+shell_pid: "2943638"
 history: []
 agent_profile: implementer-ivan
 authoritative_surface: core/
@@ -113,3 +117,8 @@ Qt currently talks to the core through `core/include/pontificate_core.h` and `co
 Review status mapping, null-handle behavior, caller-owned memory patterns, and compatibility with existing Qt C++ calls. Run `zig build test` and `cmake --build build`.
 
 Implementation command: `spec-kitty agent action implement WP03 --agent <name>`
+
+## Activity Log
+
+- 2026-06-08T07:15:40Z – codex – shell_pid=2943638 – Implemented C ABI split, trim, move, opacity keyframe set, and opacity evaluation functions with explicit status mapping; validation: zig build test, zig build run, cmake -S . -B build, cmake --build build, git diff --check.
+- 2026-06-08T07:16:07Z – codex – shell_pid=2943638 – Started review via action command

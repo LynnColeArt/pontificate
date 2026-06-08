@@ -89,7 +89,7 @@
       "parallel_group": 4
     }
   ],
-  "computed_at": "2026-06-08T05:50:18.306860+00:00",
+  "computed_at": "2026-06-08T06:41:57.818899+00:00",
   "computed_from": "dependency_graph+ownership",
   "planning_artifact_wps": [
     "WP05"

@@ -21,7 +21,8 @@ subtasks:
 - T022
 - T023
 - T024
-agent: codex
+agent: "codex"
+shell_pid: "2943638"
 history: []
 agent_profile: curator-carla
 authoritative_surface: docs/
@@ -116,3 +117,9 @@ This mission creates the shared keyframe/editing spine for future features. Miss
 Review for truthfulness, exact ABI names, and clear non-goals. Run the documented commands and compare docs against implemented behavior.
 
 Implementation command: `spec-kitty agent action implement WP05 --agent <name>`
+
+## Activity Log
+
+- 2026-06-08T07:30:23Z – codex – shell_pid=2943638 – Updated README/features/architecture docs for shipped split/trim/move, opacity keyframes, JSON persistence, C ABI, Qt edit controls, CLI inspection, non-goals, and validation commands. Validation passed: zig build test; zig build run; cmake -S . -B build; cmake --build build; git diff --check.
+- 2026-06-08T07:31:03Z – codex – shell_pid=2943638 – Started review via action command
+- 2026-06-08T07:32:23Z – codex – shell_pid=2943638 – Review passed. PASS dead code N/A for docs with one CLI wording correction; synthetic-fixture N/A; silent empty return N/A; FR coverage PASS via docs aligned to FR-013/NFR/C contracts; frozen surface PASS; locked decision PASS; shared-file ownership PASS; production fragility PASS. Validation passed: zig build test; zig build run; cmake -S . -B build; cmake --build build; git diff --check.

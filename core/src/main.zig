@@ -33,6 +33,7 @@ pub fn main(init: std.process.Init) !void {
         "tracks={d} clips={d} subtitle_cues={d} opacity_at_0.6s={d:.2}\n",
         .{ stats.tracks, stats.clips, stats.subtitle_cues, opacity_midpoint },
     );
+    try stdout.print("timeline_edit_ops=split,trim,move keyframes=opacity\n", .{});
     try stdout.flush();
 }
 
@@ -63,6 +64,28 @@ fn inspectProject(init: std.process.Init, path: []const u8) !void {
                 @tagName(asset.status),
                 asset.display_name,
                 asset.source_path,
+            },
+        );
+    }
+    var clip_index: usize = 0;
+    while (clip_index < loaded.clipCount()) : (clip_index += 1) {
+        const summary = loaded.clipSummary(clip_index) orelse continue;
+        const eval_time = if (summary.duration < 0.5) summary.duration else 0.5;
+        const opacity = try loaded.evaluateClipOpacity(clip_index, eval_time);
+        try stdout.print(
+            "clip index={d} id={d} asset={d} track={d} start={d:.2} source_in={d:.2} duration={d:.2} opacity={d:.2} opacity_at_{d:.2}s={d:.2} blend={s}\n",
+            .{
+                clip_index,
+                summary.clip_id.value,
+                summary.asset_id.value,
+                summary.track_index,
+                summary.timeline_start,
+                summary.source_in,
+                summary.duration,
+                summary.opacity,
+                eval_time,
+                opacity,
+                @tagName(summary.blend_mode),
             },
         );
     }

@@ -13,12 +13,16 @@ tracker_refs: []
 planning_base_branch: main
 merge_target_branch: main
 branch_strategy: Planning artifacts for this mission were generated on main. During /spec-kitty.implement this WP may branch from a dependency-specific base, but completed changes must merge back into main unless the human explicitly redirects the landing branch.
+base_branch: kitty/mission-timeline-editing-and-keyframe-engine-01KTJVYN
+base_commit: ffcbe5ce719c735e9e557564dfde8fa17e77d1ff
+created_at: '2026-06-08T07:18:03.166359+00:00'
 subtasks:
 - T017
 - T018
 - T019
 - T020
-agent: codex
+agent: "codex"
+shell_pid: "2943638"
 history: []
 agent_profile: implementer-ivan
 authoritative_surface: ui/src/main.cpp
@@ -113,3 +117,8 @@ Add first-pass Qt controls for selected-clip split, trim, move, and opacity keyf
 Review whether Qt is still presentation-only, whether status messages are clear, and whether zoom is reapplied after redraw. Build the Qt app and smoke the controls if possible.
 
 Implementation command: `spec-kitty agent action implement WP04 --agent <name>`
+
+## Activity Log
+
+- 2026-06-08T07:20:57Z – codex – shell_pid=2943638 – Added Qt Edit dock with clip-index selection, split/trim/move controls, opacity keyframe/evaluation controls, status feedback, and zoom-preserving redraw from core summaries; validation: zig build test, cmake -S . -B build, cmake --build build, git diff --check.
+- 2026-06-08T07:21:33Z – codex – shell_pid=2943638 – Started review via action command
