@@ -288,8 +288,16 @@ fn statusFromError(err: anyerror) AbiStatus {
         error.UnsupportedAsset => .unsupported,
         error.ClipIndexOutOfBounds => .out_of_range,
         error.InvalidTrack, error.InvalidTime, error.IncompatibleTrack, error.InvalidKeyframe => .invalid,
-        error.NoSpaceLeft => .buffer_too_small,
+        error.NoSpaceLeft, error.WriteFailed => .buffer_too_small,
         else => .io_error,
+    };
+}
+
+fn statusFromProbeStatus(status: media_model.ProbeStatus) AbiStatus {
+    return switch (status) {
+        .unprobed, .available => .ok,
+        .tool_unavailable, .unsupported => .unsupported,
+        .failed, .malformed => .io_error,
     };
 }
 
@@ -309,6 +317,89 @@ fn writeFormattedCString(
         return statusCode(statusFromError(err));
     };
     buffer[formatted.len] = 0;
+    return statusCode(.ok);
+}
+
+fn writeProbeSummary(
+    asset: media_model.MediaAsset,
+    buffer_ptr: ?[*]u8,
+    buffer_len: u32,
+) u32 {
+    const raw = buffer_ptr orelse return statusCode(.null_argument);
+    const len: usize = @intCast(buffer_len);
+    if (len == 0) return statusCode(.buffer_too_small);
+
+    const buffer = raw[0..len];
+    var writer = std.Io.Writer.fixed(buffer[0 .. len - 1]);
+    writer.print("probe_status={s}", .{@tagName(asset.probe_status)}) catch |err| {
+        buffer[0] = 0;
+        return statusCode(statusFromError(err));
+    };
+
+    if (asset.metadata.duration_seconds orelse asset.duration_seconds) |duration| {
+        writer.print("|duration={d:.3}", .{duration}) catch |err| {
+            buffer[0] = 0;
+            return statusCode(statusFromError(err));
+        };
+    } else {
+        writer.writeAll("|duration=unknown") catch |err| {
+            buffer[0] = 0;
+            return statusCode(statusFromError(err));
+        };
+    }
+
+    if (asset.metadata.dimensions orelse asset.dimensions) |dimensions| {
+        writer.print("|dimensions={d}x{d}", .{ dimensions.width, dimensions.height }) catch |err| {
+            buffer[0] = 0;
+            return statusCode(statusFromError(err));
+        };
+    } else {
+        writer.writeAll("|dimensions=unknown") catch |err| {
+            buffer[0] = 0;
+            return statusCode(statusFromError(err));
+        };
+    }
+
+    if (asset.metadata.frame_rate) |frame_rate| {
+        writer.print("|frame_rate={d:.3}", .{frame_rate.asFloat()}) catch |err| {
+            buffer[0] = 0;
+            return statusCode(statusFromError(err));
+        };
+    } else {
+        writer.writeAll("|frame_rate=unknown") catch |err| {
+            buffer[0] = 0;
+            return statusCode(statusFromError(err));
+        };
+    }
+
+    writer.print(
+        "|has_video={any}|has_audio={any}|has_subtitles={any}",
+        .{ asset.metadata.has_video, asset.metadata.has_audio, asset.metadata.has_subtitles },
+    ) catch |err| {
+        buffer[0] = 0;
+        return statusCode(statusFromError(err));
+    };
+
+    if (asset.metadata.container) |value| {
+        writer.print("|container={s}", .{value}) catch |err| {
+            buffer[0] = 0;
+            return statusCode(statusFromError(err));
+        };
+    }
+    if (asset.metadata.video_codec) |value| {
+        writer.print("|video_codec={s}", .{value}) catch |err| {
+            buffer[0] = 0;
+            return statusCode(statusFromError(err));
+        };
+    }
+    if (asset.metadata.audio_codec) |value| {
+        writer.print("|audio_codec={s}", .{value}) catch |err| {
+            buffer[0] = 0;
+            return statusCode(statusFromError(err));
+        };
+    }
+
+    buffer[writer.end] = 0;
     return statusCode(.ok);
 }
 
@@ -370,15 +461,34 @@ export fn pontificate_project_asset_summary(
     return writeFormattedCString(
         buffer,
         buffer_len,
-        "id={d}|kind={s}|status={s}|name={s}|path={s}",
+        "id={d}|kind={s}|status={s}|probe={s}|name={s}|path={s}",
         .{
             asset.id.value,
             @tagName(asset.kind),
             @tagName(asset.status),
+            @tagName(asset.probe_status),
             asset.display_name,
             asset.source_path,
         },
     );
+}
+
+export fn pontificate_project_probe_asset(project_ptr: ?*anyopaque, index: u32) u32 {
+    const handle = handleFromOpaque(project_ptr) orelse return statusCode(.null_argument);
+    const status = handle.project.probeAsset(abiIo(), @intCast(index)) catch |err| return statusCode(statusFromError(err));
+    return statusCode(statusFromProbeStatus(status));
+}
+
+export fn pontificate_project_asset_probe_summary(
+    project_ptr: ?*const anyopaque,
+    index: u32,
+    buffer: ?[*]u8,
+    buffer_len: u32,
+) u32 {
+    const handle = constHandleFromOpaque(project_ptr) orelse return statusCode(.null_argument);
+    const asset_index: usize = @intCast(index);
+    if (asset_index >= handle.project.assets.items.len) return statusCode(.out_of_range);
+    return writeProbeSummary(handle.project.assets.items[asset_index], buffer, buffer_len);
 }
 
 export fn pontificate_project_add_asset_to_timeline(project_ptr: ?*anyopaque, asset_index: u32) u32 {
@@ -551,6 +661,16 @@ test "project C ABI imports summarizes clips and round trips persistence" {
         pontificate_project_asset_summary(handle, 0, asset_buffer[0..].ptr, asset_buffer.len),
     );
     try std.testing.expect(std.mem.indexOf(u8, bufferText(&asset_buffer), "name=clip.mp4") != null);
+    try std.testing.expect(std.mem.indexOf(u8, bufferText(&asset_buffer), "probe=unprobed") != null);
+
+    var probe_buffer: [512]u8 = undefined;
+    try std.testing.expectEqual(
+        statusCode(.ok),
+        pontificate_project_asset_probe_summary(handle, 0, probe_buffer[0..].ptr, probe_buffer.len),
+    );
+    const probe_text = bufferText(&probe_buffer);
+    try std.testing.expect(std.mem.indexOf(u8, probe_text, "probe_status=unprobed") != null);
+    try std.testing.expect(std.mem.indexOf(u8, probe_text, "duration=unknown") != null);
 
     try std.testing.expectEqual(statusCode(.ok), pontificate_project_add_asset_to_timeline(handle, 0));
     try std.testing.expectEqual(@as(u32, 1), pontificate_project_clip_count(handle));
@@ -645,6 +765,7 @@ test "project C ABI edit failures are explicit" {
 test "project C ABI handles nulls ranges and small buffers" {
     try std.testing.expectEqual(statusCode(.null_argument), pontificate_project_import_path(null, null));
     try std.testing.expectEqual(@as(u32, 0), pontificate_project_asset_count(null));
+    try std.testing.expectEqual(statusCode(.null_argument), pontificate_project_probe_asset(null, 0));
 
     const handle = pontificate_project_create().?;
     defer pontificate_project_destroy(handle);
@@ -653,6 +774,10 @@ test "project C ABI handles nulls ranges and small buffers" {
     try std.testing.expectEqual(
         statusCode(.out_of_range),
         pontificate_project_asset_summary(handle, 0, tiny_buffer[0..].ptr, tiny_buffer.len),
+    );
+    try std.testing.expectEqual(
+        statusCode(.out_of_range),
+        pontificate_project_asset_probe_summary(handle, 0, tiny_buffer[0..].ptr, tiny_buffer.len),
     );
 
     var tmp = std.testing.tmpDir(.{});
@@ -666,5 +791,35 @@ test "project C ABI handles nulls ranges and small buffers" {
         statusCode(.buffer_too_small),
         pontificate_project_asset_summary(handle, 0, tiny_buffer[0..].ptr, tiny_buffer.len),
     );
+    try std.testing.expectEqual(
+        statusCode(.buffer_too_small),
+        pontificate_project_asset_probe_summary(handle, 0, tiny_buffer[0..].ptr, tiny_buffer.len),
+    );
     try std.testing.expectEqual(statusCode(.out_of_range), pontificate_project_add_asset_to_timeline(handle, 99));
+}
+
+test "project C ABI probe unavailable tool and unsupported summaries are explicit" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "clip.mp4", .data = "fixture" });
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "captions.srt", .data = "00:00:00,000 --> 00:00:01,000\nHello" });
+
+    const source_path = try tmpProjectPathZ(std.testing.allocator, tmp, "clip.mp4");
+    defer std.testing.allocator.free(source_path);
+    const subtitle_path = try tmpProjectPathZ(std.testing.allocator, tmp, "captions.srt");
+    defer std.testing.allocator.free(subtitle_path);
+
+    const handle = pontificate_project_create().?;
+    defer pontificate_project_destroy(handle);
+
+    try std.testing.expectEqual(statusCode(.ok), pontificate_project_import_path(handle, source_path.ptr));
+    try std.testing.expectEqual(statusCode(.ok), pontificate_project_import_path(handle, subtitle_path.ptr));
+
+    try std.testing.expectEqual(statusCode(.unsupported), pontificate_project_probe_asset(handle, 1));
+    var summary_buffer: [512]u8 = undefined;
+    try std.testing.expectEqual(
+        statusCode(.ok),
+        pontificate_project_asset_probe_summary(handle, 1, summary_buffer[0..].ptr, summary_buffer.len),
+    );
+    try std.testing.expect(std.mem.indexOf(u8, bufferText(&summary_buffer), "probe_status=unsupported") != null);
 }

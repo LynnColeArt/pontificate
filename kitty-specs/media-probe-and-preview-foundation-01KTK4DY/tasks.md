@@ -87,10 +87,10 @@ Generated from `spec.md`, `plan.md`, `research.md`, `data-model.md`, `quickstart
 
 **Included subtasks**:
 
-- [ ] T013 Add C header declarations for probe operation and probe summary. (WP03)
-- [ ] T014 Implement ABI status mapping for probe outcomes. (WP03)
-- [ ] T015 Implement caller-owned probe summary buffer behavior. (WP03)
-- [ ] T016 Add ABI-focused tests for summary and buffer-too-small behavior. (WP03)
+- [x] T013 Add C header declarations for probe operation and probe summary. (WP03)
+- [x] T014 Implement ABI status mapping for probe outcomes. (WP03)
+- [x] T015 Implement caller-owned probe summary buffer behavior. (WP03)
+- [x] T016 Add ABI-focused tests for summary and buffer-too-small behavior. (WP03)
 
 **Independent test**: ABI calls return OK, unsupported/out-of-range, and buffer-too-small statuses while never returning Zig-owned allocations.
 

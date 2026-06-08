@@ -54,6 +54,12 @@ uint32_t pontificate_project_asset_summary(
     uint32_t index,
     char *buffer,
     uint32_t buffer_len);
+uint32_t pontificate_project_probe_asset(PontificateProject *project, uint32_t index);
+uint32_t pontificate_project_asset_probe_summary(
+    const PontificateProject *project,
+    uint32_t index,
+    char *buffer,
+    uint32_t buffer_len);
 
 uint32_t pontificate_project_add_asset_to_timeline(PontificateProject *project, uint32_t asset_index);
 uint32_t pontificate_project_clip_count(const PontificateProject *project);

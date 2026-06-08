@@ -83,3 +83,7 @@ The Qt shell consumes opaque project handles and caller-owned summary buffers. T
 ## Reviewer Guidance
 
 Review ABI ownership, status behavior, and whether summary fields match `contracts/pontificate-core-probe-preview-c-abi.md`.
+
+## Activity Log
+
+- 2026-06-08T08:48:00Z - codex - Implemented C ABI probe operation, probe summary buffers, status mapping, compact asset probe field, and ABI tests; validation: `zig build test`, `zig build run`, `cmake -S . -B build`, `cmake --build build`.
