@@ -6,113 +6,133 @@
   "criteria": [
     {
       "criterion_id": "FR-001",
-      "description": "Verify FR-001 is satisfied",
+      "description": "Imported files are represented as stable core media assets with names, paths, kinds, status, and import order.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "WP01 ae4e542; core/src/media.zig asset model and tests; validated by `zig build test` on 2026-06-08.",
+      "pass_fail": "pass",
+      "verified_by": "codex",
+      "verified_at": "2026-06-08T05:23:15Z",
+      "notes": "Covers stable IDs, display names, reference paths, media kind/status, and import ordering."
     },
     {
       "criterion_id": "FR-002",
-      "description": "Verify FR-002 is satisfied",
-      "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "description": "The Qt shell exposes an import action for one or more local files and passes them to the Zig core.",
+      "proof_type": "code_review",
+      "evidence": "WP05 5520ed8; ui/src/main.cpp wires QFileDialog import into pontificate_project_import_path; validated by `cmake -S . -B build` and `cmake --build build` on 2026-06-08.",
+      "pass_fail": "pass",
+      "verified_by": "codex",
+      "verified_at": "2026-06-08T05:23:15Z",
+      "notes": "Manual display import remains a future automation target; build and code review prove the current Qt workflow surface."
     },
     {
       "criterion_id": "FR-003",
-      "description": "Verify FR-003 is satisfied",
+      "description": "Duplicate imports are handled deterministically instead of creating repeated library rows.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "WP01 ae4e542 and WP02 5403791 duplicate-path behavior; validated by `zig build test` on 2026-06-08.",
+      "pass_fail": "pass",
+      "verified_by": "codex",
+      "verified_at": "2026-06-08T05:23:15Z",
+      "notes": "The Qt shell reports duplicate outcomes from core status codes."
     },
     {
       "criterion_id": "FR-004",
-      "description": "Verify FR-004 is satisfied",
+      "description": "Missing media remains visible as offline/missing project state instead of being dropped.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "WP01 ae4e542 and WP02 5403791 missing/offline media tests; validated by `zig build test` on 2026-06-08.",
+      "pass_fail": "pass",
+      "verified_by": "codex",
+      "verified_at": "2026-06-08T05:23:15Z",
+      "notes": "Project load revalidates reference paths and preserves missing assets."
     },
     {
       "criterion_id": "FR-005",
-      "description": "Verify FR-005 is satisfied",
+      "description": "Project save/load persists media-library state through JSON schema version 1.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "WP02 5403791; core/src/project.zig JSON save/load and CLI inspect/import-save paths; validated by `zig build test` and `zig build run` on 2026-06-08.",
+      "pass_fail": "pass",
+      "verified_by": "codex",
+      "verified_at": "2026-06-08T05:23:15Z",
+      "notes": "Schema v1 stores project ID, assets, timeline tracks, and clips."
     },
     {
       "criterion_id": "FR-006",
-      "description": "Verify FR-006 is satisfied",
-      "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "description": "The Library panel renders project assets from the core instead of hardcoded demo rows.",
+      "proof_type": "code_review",
+      "evidence": "WP04 950803a exposes asset count/summary ABI; WP05 5520ed8 refreshes Qt Library rows from pontificate_project_asset_summary; CMake build passed on 2026-06-08.",
+      "pass_fail": "pass",
+      "verified_by": "codex",
+      "verified_at": "2026-06-08T05:23:15Z",
+      "notes": "Empty projects now show empty library state rather than fake starter assets."
     },
     {
       "criterion_id": "FR-007",
-      "description": "Verify FR-007 is satisfied",
+      "description": "Imported assets can be added to initial asset-backed timeline state.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "WP03 3edd571 timeline model; WP04 950803a pontificate_project_add_asset_to_timeline ABI; validated by `zig build test` on 2026-06-08.",
+      "pass_fail": "pass",
+      "verified_by": "codex",
+      "verified_at": "2026-06-08T05:23:15Z",
+      "notes": "Timeline clips reference core media asset IDs and default tracks."
     },
     {
       "criterion_id": "FR-008",
-      "description": "Verify FR-008 is satisfied",
-      "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "description": "Timeline rendering is data-driven from core/project state while preserving timeline zoom behavior.",
+      "proof_type": "code_review",
+      "evidence": "WP03 3edd571 clip summaries; WP05 5520ed8 TimelineView renders core clip summaries and preserves zoomPercent; CMake build passed on 2026-06-08.",
+      "pass_fail": "pass",
+      "verified_by": "codex",
+      "verified_at": "2026-06-08T05:23:15Z",
+      "notes": "The old hardcoded clip list was replaced with model-fed clip rows."
     },
     {
       "criterion_id": "FR-009",
-      "description": "Verify FR-009 is satisfied",
+      "description": "A core CLI path can summarize default or saved project state without Qt.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "WP02 5403791; `zig build run` prints core/timeline summary and supports `import-save` and `inspect`; validated on 2026-06-08.",
+      "pass_fail": "pass",
+      "verified_by": "codex",
+      "verified_at": "2026-06-08T05:23:15Z",
+      "notes": "CLI smoke output: `tracks=4 clips=3 subtitle_cues=2 opacity_at_0.6s=0.50`."
     },
     {
       "criterion_id": "FR-010",
-      "description": "Verify FR-010 is satisfied",
+      "description": "The C ABI exposes project/media/timeline functions for Qt through an explicit boundary.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "WP04 950803a; core/include/pontificate_core.h and core/src/pontificate.zig opaque handle APIs; validated by `zig build test`, symbol inspection during WP04 review, and CMake link on 2026-06-08.",
+      "pass_fail": "pass",
+      "verified_by": "codex",
+      "verified_at": "2026-06-08T05:23:15Z",
+      "notes": "Summary APIs use caller-owned buffers; Qt does not own Zig project internals."
     },
     {
       "criterion_id": "FR-011",
-      "description": "Verify FR-011 is satisfied",
+      "description": "Public docs describe current project/media-library behavior and keep roadmap items marked as future work.",
+      "proof_type": "documentation_review",
+      "evidence": "WP06 81577c5 plus review fix 42c4ac1; README.md, docs/ARCHITECTURE.md, docs/FEATURES.md, docs/DISTRIBUTION.md; validated by `git diff --check` and roadmap wording scan on 2026-06-08.",
+      "pass_fail": "pass",
+      "verified_by": "codex",
+      "verified_at": "2026-06-08T05:23:15Z",
+      "notes": "Docs explicitly say playback, export, darkroom color, Whisper/subtitle generation, proxies, thumbnails, and packaging are not shipped by this mission."
+    },
+    {
+      "criterion_id": "SC-005",
+      "description": "The required final validation commands pass for the foundation mission.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "`zig build test`; `zig build run`; `cmake -S . -B build`; `cmake --build build`; `git diff --check` all passed on 2026-06-08 in the WP06 lane after the final docs clarification commit 42c4ac1.",
+      "pass_fail": "pass",
+      "verified_by": "codex",
+      "verified_at": "2026-06-08T05:23:15Z",
+      "notes": "Qt offscreen smoke was previously run during WP05 review and exited only by timeout after entering the event loop."
+    },
+    {
+      "criterion_id": "SC-007",
+      "description": "The mission leaves clear documented non-goals for playback, export, color darkroom, subtitles/Whisper, proxies, thumbnails, and packaging.",
+      "proof_type": "documentation_review",
+      "evidence": "README.md Current Status; docs/ARCHITECTURE.md opening scope note; docs/FEATURES.md future-work sections; docs/DISTRIBUTION.md current no-package statement; review fix 42c4ac1.",
+      "pass_fail": "pass",
+      "verified_by": "codex",
+      "verified_at": "2026-06-08T05:23:15Z",
+      "notes": "A review wording pass renamed roadmap headings to reduce shipped-feature ambiguity."
     }
   ],
   "negative_invariants": []

@@ -21,6 +21,9 @@ tracker_refs: []
 planning_base_branch: main
 merge_target_branch: main
 branch_strategy: Planning artifacts for this mission were generated on main. During /spec-kitty.implement this WP may branch from a dependency-specific base, but completed changes must merge back into main unless the human explicitly redirects the landing branch.
+base_branch: kitty/mission-pontificate-editor-foundation-and-media-library-01KTJ00R
+base_commit: 12175efa46754eb193753d07d3da6efee10a0c9a
+created_at: '2026-06-08T05:08:13.213601+00:00'
 subtasks:
 - T022
 - T023
@@ -28,7 +31,8 @@ subtasks:
 - T025
 - T026
 - T027
-agent: codex
+agent: "codex"
+shell_pid: "2943638"
 history: []
 agent_profile: implementer-ivan
 authoritative_surface: ui/src/main.cpp
@@ -172,3 +176,7 @@ Implementation command: `spec-kitty agent action implement WP05 --agent <name>`
 ## Reviewer Guidance
 
 Review the Qt/Core boundary, empty-project launch, visible error states, and timeline zoom preservation. Confirm this WP only edits `ui/src/main.cpp`.
+
+## Activity Log
+
+- 2026-06-08T05:12:41Z – codex – shell_pid=2943638 – Started review via action command

@@ -1,7 +1,7 @@
 {
-  "event_count": 6,
-  "last_event_id": "01KTJQ5CQZFAH6QPWD3W3F6XJH",
-  "materialized_at": "2026-06-08T04:16:58.111396+00:00",
+  "event_count": 42,
+  "last_event_id": "01KTJV8ZW9X36PATMCM6BSBRZ8",
+  "materialized_at": "2026-06-08T05:28:50.313245+00:00",
   "mission_number": "",
   "mission_slug": "pontificate-editor-foundation-and-media-library-01KTJ00R",
   "mission_type": "software-dev",
@@ -10,7 +10,7 @@
     "blocked": 0,
     "canceled": 0,
     "claimed": 0,
-    "done": 0,
+    "done": 6,
     "for_review": 0,
     "in_progress": 0,
     "in_review": 0,
@@ -18,46 +18,46 @@
   },
   "work_packages": {
     "WP01": {
-      "actor": "finalize-tasks",
+      "actor": "merge",
       "force_count": 1,
-      "lane": "planned",
-      "last_event_id": "01KTJQ577H48MEDAP7WM4M8273",
-      "last_transition_at": "2026-06-08T04:16:52.465080+00:00"
+      "lane": "done",
+      "last_event_id": "01KTJV8RFJW4RZGFJ9GYWTHPF0",
+      "last_transition_at": "2026-06-08T05:28:42.738517+00:00"
     },
     "WP02": {
-      "actor": "finalize-tasks",
+      "actor": "merge",
       "force_count": 1,
-      "lane": "planned",
-      "last_event_id": "01KTJQ58BJ6H8CS0NYVMPS6CP6",
-      "last_transition_at": "2026-06-08T04:16:53.618552+00:00"
+      "lane": "done",
+      "last_event_id": "01KTJV8SZX6KNRS49Q8EPYQP0E",
+      "last_transition_at": "2026-06-08T05:28:44.285091+00:00"
     },
     "WP03": {
-      "actor": "finalize-tasks",
+      "actor": "merge",
       "force_count": 1,
-      "lane": "planned",
-      "last_event_id": "01KTJQ59E3GV3BHDCMWCJAQMEE",
-      "last_transition_at": "2026-06-08T04:16:54.723924+00:00"
+      "lane": "done",
+      "last_event_id": "01KTJV8VF3HBCNSY95A38T1DPQ",
+      "last_transition_at": "2026-06-08T05:28:45.795399+00:00"
     },
     "WP04": {
-      "actor": "finalize-tasks",
+      "actor": "merge",
       "force_count": 1,
-      "lane": "planned",
-      "last_event_id": "01KTJQ5AHT4EGV6RFA9G9GFSDN",
-      "last_transition_at": "2026-06-08T04:16:55.866227+00:00"
+      "lane": "done",
+      "last_event_id": "01KTJV8WXXHEPPDMSYVTW8DXXQ",
+      "last_transition_at": "2026-06-08T05:28:47.293780+00:00"
     },
     "WP05": {
-      "actor": "finalize-tasks",
+      "actor": "merge",
       "force_count": 1,
-      "lane": "planned",
-      "last_event_id": "01KTJQ5BN3ARD2Z1BS2ME5VZ8V",
-      "last_transition_at": "2026-06-08T04:16:56.996001+00:00"
+      "lane": "done",
+      "last_event_id": "01KTJV8YD48R1R3G7SMJGARBRS",
+      "last_transition_at": "2026-06-08T05:28:48.804483+00:00"
     },
     "WP06": {
-      "actor": "finalize-tasks",
+      "actor": "merge",
       "force_count": 1,
-      "lane": "planned",
-      "last_event_id": "01KTJQ5CQZFAH6QPWD3W3F6XJH",
-      "last_transition_at": "2026-06-08T04:16:58.111396+00:00"
+      "lane": "done",
+      "last_event_id": "01KTJV8ZW9X36PATMCM6BSBRZ8",
+      "last_transition_at": "2026-06-08T05:28:50.313245+00:00"
     }
   }
 }

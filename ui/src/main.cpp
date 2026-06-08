@@ -3,6 +3,8 @@
 #include <QApplication>
 #include <QDockWidget>
 #include <QDoubleSpinBox>
+#include <QFile>
+#include <QFileDialog>
 #include <QFrame>
 #include <QGraphicsDropShadowEffect>
 #include <QGraphicsRectItem>
@@ -13,6 +15,7 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QMainWindow>
+#include <QMap>
 #include <QPainter>
 #include <QPalette>
 #include <QPushButton>
@@ -23,6 +26,117 @@
 #include <QTabWidget>
 #include <QToolBar>
 #include <QVBoxLayout>
+#include <QVector>
+
+#include <algorithm>
+
+struct TimelineClipRow {
+    QString label;
+    int trackIndex = 0;
+    double timelineStart = 0.0;
+    double duration = 5.0;
+};
+
+class CoreProject {
+public:
+    CoreProject() : handle_(pontificate_project_create()) {}
+    explicit CoreProject(PontificateProject *handle) : handle_(handle) {}
+    ~CoreProject() { pontificate_project_destroy(handle_); }
+
+    CoreProject(const CoreProject &) = delete;
+    CoreProject &operator=(const CoreProject &) = delete;
+
+    PontificateProject *get() const { return handle_; }
+
+    void reset(PontificateProject *handle) {
+        if (handle_ == handle) {
+            return;
+        }
+        pontificate_project_destroy(handle_);
+        handle_ = handle;
+    }
+
+private:
+    PontificateProject *handle_ = nullptr;
+};
+
+using SummaryFields = QMap<QString, QString>;
+
+static QString statusName(uint32_t status) {
+    switch (status) {
+    case PONTIFICATE_STATUS_OK:
+        return "ok";
+    case PONTIFICATE_STATUS_NULL_ARGUMENT:
+        return "null argument";
+    case PONTIFICATE_STATUS_OUT_OF_MEMORY:
+        return "out of memory";
+    case PONTIFICATE_STATUS_IO_ERROR:
+        return "I/O error";
+    case PONTIFICATE_STATUS_UNSUPPORTED:
+        return "unsupported";
+    case PONTIFICATE_STATUS_DUPLICATE:
+        return "duplicate";
+    case PONTIFICATE_STATUS_MISSING:
+        return "missing";
+    case PONTIFICATE_STATUS_OUT_OF_RANGE:
+        return "out of range";
+    case PONTIFICATE_STATUS_BUFFER_TOO_SMALL:
+        return "buffer too small";
+    case PONTIFICATE_STATUS_INVALID:
+        return "invalid";
+    default:
+        return QString("status %1").arg(status);
+    }
+}
+
+static SummaryFields parseSummary(const QByteArray &summary) {
+    SummaryFields fields;
+    const auto parts = QString::fromUtf8(summary.constData()).split('|');
+    for (const auto &part : parts) {
+        const int equals = part.indexOf('=');
+        if (equals > 0) {
+            fields.insert(part.left(equals), part.mid(equals + 1));
+        }
+    }
+    return fields;
+}
+
+static QByteArray readAssetSummary(PontificateProject *project, uint32_t index, uint32_t *statusOut) {
+    QByteArray buffer(1024, '\0');
+    uint32_t status = pontificate_project_asset_summary(project, index, buffer.data(), static_cast<uint32_t>(buffer.size()));
+    if (status == PONTIFICATE_STATUS_BUFFER_TOO_SMALL) {
+        buffer.fill('\0', 8192);
+        status = pontificate_project_asset_summary(project, index, buffer.data(), static_cast<uint32_t>(buffer.size()));
+    }
+    if (statusOut) {
+        *statusOut = status;
+    }
+    return status == PONTIFICATE_STATUS_OK ? QByteArray(buffer.constData()) : QByteArray();
+}
+
+static QByteArray readClipSummary(PontificateProject *project, uint32_t index, uint32_t *statusOut) {
+    QByteArray buffer(1024, '\0');
+    uint32_t status = pontificate_project_clip_summary(project, index, buffer.data(), static_cast<uint32_t>(buffer.size()));
+    if (status == PONTIFICATE_STATUS_BUFFER_TOO_SMALL) {
+        buffer.fill('\0', 8192);
+        status = pontificate_project_clip_summary(project, index, buffer.data(), static_cast<uint32_t>(buffer.size()));
+    }
+    if (statusOut) {
+        *statusOut = status;
+    }
+    return status == PONTIFICATE_STATUS_OK ? QByteArray(buffer.constData()) : QByteArray();
+}
+
+static QString assetRowText(const SummaryFields &fields) {
+    const QString name = fields.value("name", "Asset");
+    const QString kind = fields.value("kind", "unknown");
+    const QString status = fields.value("status", "unknown");
+    const QString path = fields.value("path");
+    if (path.isEmpty()) {
+        return QString("%1  |  %2  |  %3").arg(name, kind, status);
+    }
+    return QString("%1  |  %2  |  %3\n%4").arg(name, kind, status, path);
+}
 
 class TimelineView : public QGraphicsView {
 public:
@@ -37,17 +151,26 @@ public:
         setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
         setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
         setResizeAnchor(QGraphicsView::AnchorViewCenter);
-        populate();
+        refreshScene();
         setZoomPercent(100);
     }
 
     void setZoomPercent(int percent) {
+        zoomPercent_ = percent;
         resetTransform();
         scale(static_cast<qreal>(percent) / 100.0, 1.0);
     }
 
+    void setClips(const QVector<TimelineClipRow> &clips) {
+        clips_ = clips;
+        refreshScene();
+        setZoomPercent(zoomPercent_);
+    }
+
 private:
     QGraphicsScene *scene_;
+    QVector<TimelineClipRow> clips_;
+    int zoomPercent_ = 100;
 
     void addTrackLabel(const QString &label, qreal y) {
         auto *text = scene_->addSimpleText(label);
@@ -55,9 +178,26 @@ private:
         text->setPos(14, y + 13);
     }
 
+    qreal trackY(int trackIndex) const {
+        const int bounded = std::max(0, std::min(trackIndex, 3));
+        return 20 + (bounded * 42);
+    }
+
+    QColor trackColor(int trackIndex) const {
+        switch (trackIndex) {
+        case 1:
+            return QColor("#f5c26b");
+        case 2:
+            return QColor("#e8edf7");
+        case 3:
+            return QColor("#b78df0");
+        default:
+            return QColor("#7fd1b9");
+        }
+    }
+
     void addClip(const QString &label, const QColor &color, qreal x, qreal y, qreal w) {
         auto *rect = scene_->addRect(x, y, w, 34, QPen(QColor("#101319")), QBrush(color));
-        rect->setFlag(QGraphicsItem::ItemIsMovable);
         rect->setToolTip(label);
 
         auto *text = scene_->addSimpleText(label);
@@ -65,7 +205,8 @@ private:
         text->setPos(x + 10, y + 8);
     }
 
-    void populate() {
+    void refreshScene() {
+        scene_->clear();
         scene_->setSceneRect(0, 0, 860, 190);
 
         const QColor trackLine("#252a33");
@@ -79,21 +220,24 @@ private:
         addTrackLabel("SUB", 102);
         addTrackLabel("GRADE", 144);
 
-        addClip("Opening shot", QColor("#7fd1b9"), 92, 20, 280);
-        addClip("Camera audio", QColor("#f5c26b"), 92, 62, 280);
-        addClip("Caption", QColor("#e8edf7"), 140, 104, 150);
-        addClip("Darkroom grade", QColor("#b78df0"), 92, 146, 280);
-        addClip("B-roll", QColor("#82aaff"), 388, 20, 190);
+        for (const auto &clip : clips_) {
+            const qreal x = 92 + (clip.timelineStart * 38.0);
+            const qreal width = std::max<qreal>(82.0, clip.duration * 38.0);
+            addClip(clip.label, trackColor(clip.trackIndex), x, trackY(clip.trackIndex), width);
+        }
     }
 };
 
-static QWidget *makeTimelinePane() {
+static QWidget *makeTimelinePane(TimelineView **timelineOut) {
     auto *pane = new QWidget;
     auto *layout = new QVBoxLayout(pane);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(8);
 
     auto *timeline = new TimelineView;
+    if (timelineOut) {
+        *timelineOut = timeline;
+    }
 
     auto *controls = new QWidget;
     auto *controlLayout = new QHBoxLayout(controls);
@@ -265,20 +409,25 @@ int main(int argc, char *argv[]) {
     app.setApplicationName("Pontificate");
     applyPalette(app);
 
+    CoreProject project;
+
     QMainWindow window;
     window.setWindowTitle("Pontificate");
     window.resize(1280, 820);
 
     auto *toolbar = window.addToolBar("Editor");
     toolbar->setMovable(false);
-    toolbar->addAction(app.style()->standardIcon(QStyle::SP_DialogOpenButton), "Open");
-    toolbar->addAction(app.style()->standardIcon(QStyle::SP_DialogSaveButton), "Save");
+    auto *openAction = toolbar->addAction(app.style()->standardIcon(QStyle::SP_DialogOpenButton), "Open");
+    auto *saveAction = toolbar->addAction(app.style()->standardIcon(QStyle::SP_DialogSaveButton), "Save");
+    auto *importAction = toolbar->addAction(app.style()->standardIcon(QStyle::SP_FileDialogDetailedView), "Import");
+    auto *addToTimelineAction = toolbar->addAction(app.style()->standardIcon(QStyle::SP_ArrowRight), "Add");
     toolbar->addSeparator();
     toolbar->addAction(app.style()->standardIcon(QStyle::SP_ArrowBack), "Undo");
     toolbar->addAction(app.style()->standardIcon(QStyle::SP_ArrowForward), "Redo");
+    addToTimelineAction->setEnabled(false);
 
     auto *library = new QListWidget;
-    library->addItems({"Opening shot", "Camera audio", "Darkroom grade", "Caption track"});
+    library->setSelectionMode(QAbstractItemView::SingleSelection);
 
     auto *libraryDock = new QDockWidget("Library", &window);
     libraryDock->setWidget(library);
@@ -290,18 +439,192 @@ int main(int argc, char *argv[]) {
     inspectorDock->setMinimumWidth(260);
     window.addDockWidget(Qt::RightDockWidgetArea, inspectorDock);
 
+    TimelineView *timeline = nullptr;
     auto *splitter = new QSplitter(Qt::Vertical);
     splitter->addWidget(makePreviewPane());
-    splitter->addWidget(makeTimelinePane());
+    splitter->addWidget(makeTimelinePane(&timeline));
     splitter->setStretchFactor(0, 3);
     splitter->setStretchFactor(1, 1);
     window.setCentralWidget(splitter);
 
+    auto refreshTimeline = [&]() {
+        QVector<TimelineClipRow> clips;
+        if (project.get()) {
+            const uint32_t count = pontificate_project_clip_count(project.get());
+            clips.reserve(static_cast<int>(count));
+            for (uint32_t index = 0; index < count; ++index) {
+                uint32_t status = PONTIFICATE_STATUS_OK;
+                const QByteArray summary = readClipSummary(project.get(), index, &status);
+                if (status != PONTIFICATE_STATUS_OK) {
+                    continue;
+                }
+                const SummaryFields fields = parseSummary(summary);
+                TimelineClipRow clip;
+                clip.label = fields.value("label", QString("Clip %1").arg(index + 1));
+                clip.trackIndex = fields.value("track_index", "0").toInt();
+                clip.timelineStart = fields.value("start", "0").toDouble();
+                clip.duration = fields.value("duration", "5").toDouble();
+                clips.append(clip);
+            }
+        }
+        if (timeline) {
+            timeline->setClips(clips);
+        }
+    };
+
+    auto refreshLibrary = [&]() {
+        library->clear();
+        if (!project.get()) {
+            addToTimelineAction->setEnabled(false);
+            return;
+        }
+        const uint32_t count = pontificate_project_asset_count(project.get());
+        for (uint32_t index = 0; index < count; ++index) {
+            uint32_t status = PONTIFICATE_STATUS_OK;
+            const QByteArray summary = readAssetSummary(project.get(), index, &status);
+            auto *item = new QListWidgetItem;
+            item->setData(Qt::UserRole, index);
+            if (status == PONTIFICATE_STATUS_OK) {
+                item->setText(assetRowText(parseSummary(summary)));
+            } else {
+                item->setText(QString("Asset %1  |  %2").arg(index + 1).arg(statusName(status)));
+            }
+            library->addItem(item);
+        }
+        addToTimelineAction->setEnabled(library->currentItem() != nullptr);
+    };
+
+    auto refreshAll = [&]() {
+        refreshLibrary();
+        refreshTimeline();
+    };
+
+    auto showStatus = [&](const QString &message) {
+        window.statusBar()->showMessage(message, 6000);
+    };
+
+    auto addSelectedAssetToTimeline = [&]() {
+        if (!project.get()) {
+            showStatus("Core project unavailable");
+            return;
+        }
+        auto *item = library->currentItem();
+        if (!item) {
+            showStatus("Select a library asset first");
+            return;
+        }
+        const uint32_t assetIndex = item->data(Qt::UserRole).toUInt();
+        const uint32_t status = pontificate_project_add_asset_to_timeline(project.get(), assetIndex);
+        if (status == PONTIFICATE_STATUS_OK) {
+            refreshTimeline();
+            showStatus(QString("Added asset %1 to timeline").arg(assetIndex + 1));
+        } else {
+            showStatus(QString("Could not add asset: %1").arg(statusName(status)));
+        }
+    };
+
+    QObject::connect(library, &QListWidget::itemSelectionChanged, &window, [&]() {
+        addToTimelineAction->setEnabled(project.get() && library->currentItem());
+    });
+    QObject::connect(library, &QListWidget::itemDoubleClicked, &window, [&](QListWidgetItem *) {
+        addSelectedAssetToTimeline();
+    });
+    QObject::connect(addToTimelineAction, &QAction::triggered, &window, addSelectedAssetToTimeline);
+
+    QObject::connect(importAction, &QAction::triggered, &window, [&]() {
+        if (!project.get()) {
+            showStatus("Core project unavailable");
+            return;
+        }
+        const QStringList paths = QFileDialog::getOpenFileNames(
+            &window,
+            "Import Media",
+            QString(),
+            "Media Files (*.mp4 *.mov *.mkv *.webm *.avi *.wav *.mp3 *.flac *.ogg *.m4a *.png *.jpg *.jpeg *.webp *.tif *.tiff *.srt *.vtt *.ass);;All Files (*)");
+        if (paths.isEmpty()) {
+            return;
+        }
+
+        int imported = 0;
+        int missing = 0;
+        int duplicate = 0;
+        int unsupported = 0;
+        int failed = 0;
+        for (const auto &path : paths) {
+            const QByteArray encoded = QFile::encodeName(path);
+            const uint32_t status = pontificate_project_import_path(project.get(), encoded.constData());
+            switch (status) {
+            case PONTIFICATE_STATUS_OK:
+                ++imported;
+                break;
+            case PONTIFICATE_STATUS_MISSING:
+                ++missing;
+                break;
+            case PONTIFICATE_STATUS_DUPLICATE:
+                ++duplicate;
+                break;
+            case PONTIFICATE_STATUS_UNSUPPORTED:
+                ++unsupported;
+                break;
+            default:
+                ++failed;
+                break;
+            }
+        }
+        refreshLibrary();
+        showStatus(QString("Import: %1 added, %2 missing, %3 duplicate, %4 unsupported, %5 failed")
+                       .arg(imported)
+                       .arg(missing)
+                       .arg(duplicate)
+                       .arg(unsupported)
+                       .arg(failed));
+    });
+
+    QObject::connect(saveAction, &QAction::triggered, &window, [&]() {
+        if (!project.get()) {
+            showStatus("Core project unavailable");
+            return;
+        }
+        const QString path = QFileDialog::getSaveFileName(&window, "Save Project", QString(), "Pontificate Project (*.json);;All Files (*)");
+        if (path.isEmpty()) {
+            return;
+        }
+        const QByteArray encoded = QFile::encodeName(path);
+        const uint32_t status = pontificate_project_save(project.get(), encoded.constData());
+        showStatus(status == PONTIFICATE_STATUS_OK
+                       ? QString("Saved %1").arg(path)
+                       : QString("Save failed: %1").arg(statusName(status)));
+    });
+
+    QObject::connect(openAction, &QAction::triggered, &window, [&]() {
+        const QString path = QFileDialog::getOpenFileName(&window, "Open Project", QString(), "Pontificate Project (*.json);;All Files (*)");
+        if (path.isEmpty()) {
+            return;
+        }
+        const QByteArray encoded = QFile::encodeName(path);
+        PontificateProject *loaded = pontificate_project_load(encoded.constData());
+        if (!loaded) {
+            showStatus(QString("Open failed: %1").arg(path));
+            return;
+        }
+        project.reset(loaded);
+        refreshAll();
+        showStatus(QString("Opened %1").arg(path));
+    });
+
     const double midpoint = pontificate_evaluate_keyframe_linear(0.0, 1.0, 0.0, 1.2, 0.6);
-    window.statusBar()->showMessage(QString("core %1 | %2 | midpoint opacity %3")
-                                        .arg(pontificate_version())
-                                        .arg(pontificate_default_project_summary())
-                                        .arg(midpoint, 0, 'f', 2));
+    if (!project.get()) {
+        showStatus("Core project unavailable");
+        importAction->setEnabled(false);
+        saveAction->setEnabled(false);
+        openAction->setEnabled(false);
+    } else {
+        refreshAll();
+        window.statusBar()->showMessage(QString("core %1 | %2 | midpoint opacity %3")
+                                            .arg(pontificate_version())
+                                            .arg(pontificate_default_project_summary())
+                                            .arg(midpoint, 0, 'f', 2));
+    }
 
     window.show();
     return app.exec();

@@ -2,7 +2,26 @@
 
 Pontificate is Linux-first video editing without the usual rough edges. The editor should feel approachable on day one while still having a serious core for color, subtitles, timing, and export.
 
+## Implemented Foundation
+
+- Linux-first Zig 0.16 core and Qt 5 Widgets shell.
+- Media import by extension for common video, audio, image, and subtitle files.
+- Core media library records with stable asset IDs, display names, source paths, kind, status, and import order.
+- Duplicate detection for repeated imports of the same selected path.
+- Missing/offline media status preserved in project state.
+- JSON project save/load with schema version `1`.
+- Default timeline tracks for video, audio, subtitles, and adjustment/grade.
+- Asset-backed timeline clips with asset references, start time, source in, duration, opacity placeholder, and blend mode placeholder.
+- C ABI with opaque project handles and caller-owned summary buffers for media and timeline rows.
+- Qt Library rows populated from core summaries.
+- Qt action to add a selected Library asset to the timeline.
+- Timeline rendering from core clip summaries while preserving the existing zoom slider behavior.
+- Open/save dialogs for JSON project smoke workflows.
+- Core validation through Zig tests plus CMake/Qt build validation.
+
 ## Editing
+
+Planned editing scope:
 
 - media library with bins, metadata, search, thumbnails, and missing-media relinking
 - layered video, audio, subtitle, and adjustment tracks
@@ -25,6 +44,8 @@ This should drive transform, crop, opacity, blend amount, transition progress, c
 
 ## Color Darkroom
 
+Future work:
+
 - dedicated grading workspace
 - exposure, contrast, saturation, temperature, tint, curves, wheels, and LUT import
 - scopes: waveform, RGB parade, vectorscope, and histogram
@@ -33,6 +54,8 @@ This should drive transform, crop, opacity, blend amount, transition progress, c
 - blend modes and adjustment layers that can be keyframed
 
 ## Subtitles
+
+Future work beyond basic subtitle file classification:
 
 - import and export SRT, VTT, and ASS/SSA where practical
 - edit subtitles in place on the timeline and in a text-focused panel
@@ -45,6 +68,8 @@ This should drive transform, crop, opacity, blend amount, transition progress, c
 
 ## Audio
 
+Future work:
+
 - waveform display
 - gain, fades, pan, mute, solo, and normalization
 - basic EQ, compression, and noise cleanup as later built-ins
@@ -52,14 +77,23 @@ This should drive transform, crop, opacity, blend amount, transition progress, c
 
 ## Reliability And Performance
 
+Partially started:
+
+- stable project format with schema versioning
+- graceful offline media records for missing sources
+
+Future work:
+
 - command-based undo and redo across every edit surface
 - autosave, crash recovery, and project backups
 - proxy generation, render cache, preview quality controls, and cache invalidation
-- stable project format with schema versioning and migrations
-- graceful offline media handling and relinking
+- project migrations
+- media relinking
 - deterministic render planning with test coverage in the Zig core
 
 ## Export
+
+Future work:
 
 - render selected range or full timeline
 - export queue with presets for common web, archival, and audio-only outputs
