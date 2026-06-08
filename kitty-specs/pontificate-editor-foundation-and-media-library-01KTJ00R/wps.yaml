@@ -1,0 +1,177 @@
+work_packages:
+  - id: WP01
+    title: "Core Media Asset Model"
+    dependencies: []
+    owned_files:
+      - "core/src/media.zig"
+    requirement_refs:
+      - FR-001
+      - FR-003
+      - FR-004
+      - NFR-001
+      - NFR-004
+      - NFR-005
+      - C-001
+      - C-004
+    plan_concern_refs:
+      - IC-01
+    subtasks:
+      - T001
+      - T002
+      - T003
+      - T004
+      - T005
+    prompt_file: "tasks/WP01-core-media-asset-model.md"
+
+  - id: WP02
+    title: "Project Persistence And CLI Inspection"
+    dependencies:
+      - WP01
+    owned_files:
+      - "core/src/project.zig"
+      - "core/src/main.zig"
+    requirement_refs:
+      - FR-001
+      - FR-003
+      - FR-004
+      - FR-005
+      - FR-009
+      - NFR-001
+      - NFR-004
+      - NFR-005
+      - C-001
+    plan_concern_refs:
+      - IC-02
+    subtasks:
+      - T006
+      - T007
+      - T008
+      - T009
+      - T010
+      - T011
+    prompt_file: "tasks/WP02-project-persistence-and-cli-inspection.md"
+
+  - id: WP03
+    title: "Asset Backed Timeline Model"
+    dependencies:
+      - WP01
+      - WP02
+    owned_files:
+      - "core/src/timeline.zig"
+    requirement_refs:
+      - FR-001
+      - FR-007
+      - FR-008
+      - NFR-001
+      - C-001
+      - C-004
+      - C-005
+      - C-006
+    plan_concern_refs:
+      - IC-01
+      - IC-05
+    subtasks:
+      - T012
+      - T013
+      - T014
+      - T015
+    prompt_file: "tasks/WP03-asset-backed-timeline-model.md"
+
+  - id: WP04
+    title: "C ABI Project Boundary"
+    dependencies:
+      - WP01
+      - WP02
+      - WP03
+    owned_files:
+      - "core/include/pontificate_core.h"
+      - "core/src/pontificate.zig"
+      - "build.zig"
+      - "CMakeLists.txt"
+    requirement_refs:
+      - FR-002
+      - FR-006
+      - FR-007
+      - FR-008
+      - FR-010
+      - NFR-002
+      - NFR-003
+      - NFR-004
+      - C-001
+      - C-002
+      - C-003
+    plan_concern_refs:
+      - IC-03
+      - IC-05
+    subtasks:
+      - T016
+      - T017
+      - T018
+      - T019
+      - T020
+      - T021
+    prompt_file: "tasks/WP04-c-abi-project-boundary.md"
+
+  - id: WP05
+    title: "Qt Library Import And Timeline Display"
+    dependencies:
+      - WP04
+    owned_files:
+      - "ui/src/main.cpp"
+    requirement_refs:
+      - FR-002
+      - FR-003
+      - FR-006
+      - FR-007
+      - FR-008
+      - FR-010
+      - NFR-002
+      - NFR-003
+      - NFR-004
+      - C-001
+      - C-002
+      - C-003
+      - C-004
+    plan_concern_refs:
+      - IC-04
+      - IC-05
+    subtasks:
+      - T022
+      - T023
+      - T024
+      - T025
+      - T026
+      - T027
+    prompt_file: "tasks/WP05-qt-library-import-and-timeline-display.md"
+
+  - id: WP06
+    title: "Documentation And Validation"
+    dependencies:
+      - WP01
+      - WP02
+      - WP03
+      - WP04
+      - WP05
+    owned_files:
+      - "README.md"
+      - "docs/ARCHITECTURE.md"
+      - "docs/FEATURES.md"
+      - "docs/DISTRIBUTION.md"
+    requirement_refs:
+      - FR-011
+      - NFR-002
+      - NFR-006
+      - C-004
+      - C-005
+      - C-006
+      - C-007
+      - C-008
+    plan_concern_refs:
+      - IC-06
+    subtasks:
+      - T028
+      - T029
+      - T030
+      - T031
+      - T032
+    prompt_file: "tasks/WP06-documentation-and-validation.md"
