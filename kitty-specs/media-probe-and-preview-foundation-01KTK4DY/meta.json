@@ -1,0 +1,13 @@
+{
+  "coordination_branch": "kitty/mission-media-probe-and-preview-foundation-01KTK4DY",
+  "created_at": "2026-06-08T08:08:50.063522+00:00",
+  "friendly_name": "media probe and preview foundation",
+  "mission_id": "01KTK4DYMFWHAM8F2F0ZSY6ADD",
+  "mission_number": null,
+  "mission_slug": "media-probe-and-preview-foundation-01KTK4DY",
+  "mission_type": "software-dev",
+  "purpose_context": "This mission advances media probe and preview foundation on main so stakeholders can track the work from mission creation onward.",
+  "purpose_tldr": "media probe and preview foundation",
+  "slug": "media-probe-and-preview-foundation-01KTK4DY",
+  "target_branch": "main"
+}
