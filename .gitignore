@@ -36,6 +36,7 @@ build/
 .kittify/charter/governance.yaml
 .kittify/charter/metadata.yaml
 .kittify/charter/references.yaml
+.kittify/encoding-provenance/
 .kittify/dossiers/
 .kittify/events/
 .kittify/merge-state.json

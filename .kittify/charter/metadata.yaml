@@ -1,0 +1,13 @@
+# Auto-generated from charter.md — do not edit directly.
+# Run 'spec-kitty charter sync' to regenerate.
+
+schema_version: 1.0.0
+extracted_at: '2026-06-08T04:25:35.138150+00:00'
+charter_hash: sha256:6b3bca9d6a6862f6c16c81007f482753709db691b486edd40d600526871508f2
+source_path: .kittify/charter/charter.md
+extraction_mode: hybrid
+sections_parsed:
+  structured: 3
+  ai_assisted: 8
+  skipped: 0
+bundle_schema_version: 2

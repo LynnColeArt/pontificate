@@ -1,0 +1,8 @@
+# Auto-generated from charter.md — do not edit directly.
+# Run 'spec-kitty charter sync' to regenerate.
+
+directives:
+- id: DIR-001
+  title: Keep specification, plan, tasks, implementation, a
+  description: Keep specification, plan, tasks, implementation, and review artifacts consistent.
+  severity: warn
